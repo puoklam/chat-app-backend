@@ -16,7 +16,7 @@ services:
   nsqd:
     image: nsqio/nsq
     container_name: nsqd
-    command: /nsqd --broadcast-address=${BROADCAST_ADDR:?err} --lookupd-tcp-address=${LOOKD_TCP_ADDR:?err} --data-path=/data
+    command: /nsqd --broadcast-address=${BROADCAST_ADDR:?err} --lookupd-tcp-address=${LOOKUPD_TCP_ADDR:?err} --data-path=/data
     depends_on:
       - nsqlookupd
     ports:
