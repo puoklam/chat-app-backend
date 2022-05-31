@@ -18,7 +18,8 @@ type Message struct {
 func GetProducer() *nsq.Producer {
 	once.Do(func() {
 		cfg := nsq.NewConfig()
-		p, err := nsq.NewProducer("localhost:4150", cfg)
+		addr := os.Getenv("NSQD_IP") + ":" + os.Getenv("NSQD_PORT")
+		p, err := nsq.NewProducer(addr, cfg)
 		if err != nil {
 			os.Exit(1)
 		}

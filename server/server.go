@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/tls"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -29,7 +30,7 @@ func New(mux http.Handler) *http.Server {
 	}
 
 	return &http.Server{
-		Addr:              ":8080",
+		Addr:              ":" + os.Getenv("APP_PORT"),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       5 * time.Second,
 		WriteTimeout:      10 * time.Second,

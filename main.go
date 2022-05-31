@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
+	htp "github.com/puoklam/chat-app-backend/http"
 	"github.com/puoklam/chat-app-backend/mq"
 	"github.com/puoklam/chat-app-backend/server"
 	"github.com/puoklam/chat-app-backend/ws"
@@ -17,6 +18,9 @@ func main() {
 
 	r := chi.NewRouter()
 	server.SetupMiddlewares(r)
+
+	httpHandlers := htp.NewHandlers(logger)
+	httpHandlers.SetupRoutes(r)
 
 	wsHandlers := ws.NewHandlers(logger)
 	wsHandlers.SetupRoutes(r)
