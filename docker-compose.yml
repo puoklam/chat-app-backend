@@ -1,15 +1,14 @@
 version: '3'
 services:
   app:
-    container_name: chat_app_beckend
+    container_name: chat_app_backend
     build: .
     ports:
       - "${APP_PORT:?err}:${APP_PORT:?err}"
     restart: on-failure
     environment:
       APP_PORT: "${APP_PORT}"
-      NSQD_IP: nsqd
-      NSQD_PORT: "4150"
+      NSQD_ADDR: "nsqd:4150"
       NSQLOOKUPD_ADDR: "${NSQLOOKUPD_ADDR}"
     depends_on:
       - nsqd
@@ -17,8 +16,6 @@ services:
     image: nsqio/nsq
     container_name: nsqd
     command: /nsqd --broadcast-address=${BROADCAST_ADDR:?err} --lookupd-tcp-address=${LOOKUPD_TCP_ADDR:?err} --data-path=/data
-    depends_on:
-      - nsqlookupd
     ports:
       - "4150:4150"
       - "4151:4151"
