@@ -16,3 +16,9 @@
 
 # Environment variables
 .env
+
+# Private keys
+ed25519
+
+# Test
+/tmp

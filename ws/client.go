@@ -25,12 +25,12 @@ const (
 	maxMessageSize = 512
 )
 
-type Message struct {
-	To      string `json:"to"`
+type Data struct {
 	Topic   string `json:"topic"`
 	Content string `json:"content"`
 }
 
+// Client per connection (each device should have at most 1 connection)
 type Client struct {
 	sync.Mutex
 	logger    *log.Logger
@@ -38,8 +38,7 @@ type Client struct {
 	conn      *websocket.Conn
 	producer  *nsq.Producer
 	consumers map[string]*nsq.Consumer
-	send      chan []byte
-	receive   chan []byte
+	send      chan *nsq.Message
 }
 
 // user send msg from frontend to backend
@@ -65,7 +64,7 @@ func (c *Client) ReadPump() {
 			}
 			break
 		}
-		var data *Message
+		var data *Data
 		if err := json.Unmarshal(msg, &data); err != nil {
 			c.logger.Printf("error: %v\n", err)
 			continue
@@ -95,17 +94,13 @@ func (c *Client) writePump() {
 
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
+				msg.RequeueWithoutBackoff(0)
 				return
 			}
-			w.Write(msg)
-
-			// Add queued chat messages to the current websocket message.
-			n := len(c.send)
-			for i := 0; i < n; i++ {
-				w.Write([]byte("\n"))
-				w.Write(<-c.send)
+			if _, err := w.Write(msg.Body); err != nil {
+				msg.RequeueWithoutBackoff(0)
+				return
 			}
-
 			if err := w.Close(); err != nil {
 				return
 			}

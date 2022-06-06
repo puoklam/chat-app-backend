@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/puoklam/chat-app-backend/auth"
 	htp "github.com/puoklam/chat-app-backend/http"
 	"github.com/puoklam/chat-app-backend/mq"
 	"github.com/puoklam/chat-app-backend/server"
@@ -18,6 +19,9 @@ func main() {
 
 	r := chi.NewRouter()
 	server.SetupMiddlewares(r)
+
+	authHandlers := auth.NewHandlers(logger)
+	authHandlers.SetupRoutes(r)
 
 	httpHandlers := htp.NewHandlers(logger)
 	httpHandlers.SetupRoutes(r)
@@ -45,3 +49,6 @@ func main() {
 // https://chowdera.com/2021/05/20210501191844563l.html
 // https://github.com/nsqio/nsq/issues/980
 // https://github.com/gorilla/websocket/tree/master/examples/chat
+
+// https://stackoverflow.com/questions/31746182/docker-compose-wait-for-container-x-before-starting-y
+// https://ubuntu.com/server/docs/security-trust-store

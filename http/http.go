@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/puoklam/chat-app-backend/middleware"
 	"github.com/puoklam/chat-app-backend/mq"
 )
 
@@ -25,7 +26,10 @@ func (h *Handlers) newTopic(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SetupRoutes(r *chi.Mux) {
-	r.Post("/topic", h.newTopic)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Authenticator(h.logger))
+		r.Post("/topic", h.newTopic)
+	})
 }
 
 func NewHandlers(logger *log.Logger) *Handlers {
