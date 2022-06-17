@@ -15,10 +15,10 @@
 # vendor/
 
 # Environment variables
-.env
+*.env
 
 # Private keys
 ed25519
 
 # Test
-/tmp
+tmp

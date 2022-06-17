@@ -1,15 +1,13 @@
 package mq
 
 import (
-	"fmt"
-
 	"github.com/nsqio/go-nsq"
 )
 
 type Handler struct{}
 
 func (h *Handler) HandleMessage(m *nsq.Message) error {
-	fmt.Println(string(m.Body))
+	// fmt.Println(string(m.Body))
 	return nil
 }
 

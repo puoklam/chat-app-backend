@@ -8,7 +8,7 @@ import (
 )
 
 var producer *nsq.Producer
-var once sync.Once
+var pOnce sync.Once
 
 type Message struct {
 	Body      string
@@ -16,7 +16,7 @@ type Message struct {
 }
 
 func GetProducer() *nsq.Producer {
-	once.Do(func() {
+	pOnce.Do(func() {
 		cfg := nsq.NewConfig()
 		addr := os.Getenv("NSQD_ADDR")
 		p, err := nsq.NewProducer(addr, cfg)

@@ -1,25 +1,43 @@
 version: '3'
 services:
   app:
-    container_name: chat_app_backend
+    container_name: im-backend
     build: .
     ports:
       - "${APP_PORT:?err}:${APP_PORT:?err}"
     restart: on-failure
     environment:
       APP_PORT: "${APP_PORT}"
+      HS256_SECRET: "${HS256_SECRET}"
+      ED25519_PRIV_KEY_PATH: "${ED25519_PRIV_KEY_PATH}"
       NSQD_ADDR: "nsqd:4150"
       NSQLOOKUPD_ADDR: "${NSQLOOKUPD_ADDR}"
+      DB_CONN: "postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable"
     depends_on:
       - nsqd
+      - db
+      
   nsqd:
     image: nsqio/nsq
-    container_name: nsqd
+    container_name: im-nsqd
     command: /nsqd --broadcast-address=${BROADCAST_ADDR:?err} --lookupd-tcp-address=${LOOKUPD_TCP_ADDR:?err} --data-path=/data
     ports:
       - "4150:4150"
       - "4151:4151"
     volumes:
       - nsqddata:/data
+  db:
+    image: postgres:14-alpine
+    container_name: im-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:?err}
+      POSTGRES_USER: ${DB_USER:?err}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?err}
+    ports:
+      - "${DB_PORT:?err}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
 volumes:
   nsqddata:
+  pgdata:

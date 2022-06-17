@@ -1,21 +1,43 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/puoklam/chat-app-backend/auth"
-	htp "github.com/puoklam/chat-app-backend/http"
+	"github.com/puoklam/chat-app-backend/api/auth"
+	"github.com/puoklam/chat-app-backend/api/group"
+	"github.com/puoklam/chat-app-backend/api/socket"
+	_ "github.com/puoklam/chat-app-backend/db"
 	"github.com/puoklam/chat-app-backend/mq"
 	"github.com/puoklam/chat-app-backend/server"
 	"github.com/puoklam/chat-app-backend/ws"
 )
 
+func cleanup() error {
+	mq.GetProducer().Stop()
+	ws.GetHub().Close()
+	return mq.GetConn().Close()
+}
+
 func main() {
-	defer mq.GetProducer().Stop()
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-c
+		if cleanup() != nil {
+			os.Exit(1)
+		}
+		fmt.Println("quit")
+		os.Exit(0)
+	}()
+
 	go ws.GetHub().Run()
-	logger := log.New(os.Stdout, "Chat app server", log.LstdFlags|log.Lshortfile)
+	logger := log.New(os.Stdout, "im-backend", log.LstdFlags|log.Lshortfile)
 
 	r := chi.NewRouter()
 	server.SetupMiddlewares(r)
@@ -23,10 +45,10 @@ func main() {
 	authHandlers := auth.NewHandlers(logger)
 	authHandlers.SetupRoutes(r)
 
-	httpHandlers := htp.NewHandlers(logger)
-	httpHandlers.SetupRoutes(r)
+	grpHandlers := group.NewHandlers(logger)
+	grpHandlers.SetupRoutes(r)
 
-	wsHandlers := ws.NewHandlers(logger)
+	wsHandlers := socket.NewHandlers(logger)
 	wsHandlers.SetupRoutes(r)
 
 	srv := server.New(r)

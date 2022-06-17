@@ -17,6 +17,7 @@ FROM scratch
 
 # Copy the Pre-built binary file
 COPY --from=builder /app/bin/main .
+COPY --from=builder /app/ed25519 .
 
 # Run executable
 CMD ["./main"]

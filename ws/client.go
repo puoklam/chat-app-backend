@@ -2,7 +2,6 @@ package ws
 
 import (
 	"encoding/json"
-	"errors"
 	"log"
 	"sync"
 	"time"
@@ -30,21 +29,36 @@ type Data struct {
 	Content string `json:"content"`
 }
 
+type ClientCfg struct {
+	Logger    *log.Logger
+	Conn      *websocket.Conn
+	Producer  *nsq.Producer
+	Consumers map[string][]*nsq.Consumer
+	UserID    uint
+	IP        string
+	Send      chan *nsq.Message
+}
+
 // Client per connection (each device should have at most 1 connection)
 type Client struct {
 	sync.Mutex
 	logger    *log.Logger
-	hub       *Hub
 	conn      *websocket.Conn
 	producer  *nsq.Producer
-	consumers map[string]*nsq.Consumer
+	consumers map[string][]*nsq.Consumer
+	userId    uint
+	ip        string
 	send      chan *nsq.Message
+}
+
+func (c *Client) Send() chan *nsq.Message {
+	return c.send
 }
 
 // user send msg from frontend to backend
 func (c *Client) ReadPump() {
 	defer func() {
-		c.hub.unregister <- c
+		GetHub().unregister <- c
 		c.ClearConsumers()
 		c.conn.Close()
 	}()
@@ -76,7 +90,7 @@ func (c *Client) ReadPump() {
 }
 
 // user receive msg from backend to frontend
-func (c *Client) writePump() {
+func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
@@ -113,26 +127,36 @@ func (c *Client) writePump() {
 	}
 }
 
-func (c *Client) AddConsumer(topic string, consumer *nsq.Consumer) error {
-	if _, ok := c.consumers[topic]; ok {
-		return errors.New("topic exists")
-	}
-	c.consumers[topic] = consumer
-	return nil
+func (c *Client) AddConsumer(topic string, consumer *nsq.Consumer) {
+	c.consumers[topic] = append(c.consumers[topic], consumer)
 }
 
-func (c *Client) StopConsumer(topic string) error {
-	if _, ok := c.consumers[topic]; !ok {
-		return errors.New("topic doesn't exist")
+func (c *Client) StopConsumers(topic string) {
+	for _, csr := range c.consumers[topic] {
+		csr.Stop()
 	}
-	c.consumers[topic].Stop()
 	delete(c.consumers, topic)
-	return nil
 }
 
 func (c *Client) ClearConsumers() {
-	for topic, consumer := range c.consumers {
-		consumer.Stop()
-		delete(c.consumers, topic)
+	for topic := range c.consumers {
+		c.StopConsumers(topic)
+	}
+}
+
+func (c *Client) Close() {
+	c.ClearConsumers()
+	c.conn.Close()
+}
+
+func NewClient(cfg *ClientCfg) *Client {
+	return &Client{
+		logger:    cfg.Logger,
+		conn:      cfg.Conn,
+		producer:  cfg.Producer,
+		consumers: cfg.Consumers,
+		userId:    cfg.UserID,
+		ip:        cfg.IP,
+		send:      cfg.Send,
 	}
 }

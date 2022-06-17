@@ -9,7 +9,9 @@ import (
 	"os"
 
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/puoklam/chat-app-backend/model"
+	"github.com/puoklam/chat-app-backend/db"
+	"github.com/puoklam/chat-app-backend/db/model"
+	"gorm.io/gorm"
 )
 
 var hs256Secret any
@@ -38,14 +40,36 @@ func Authenticator(logger *log.Logger) func(http.Handler) http.Handler {
 				}
 				return hs256Secret, nil
 			})
-			if claims, ok := t.Claims.(jwt.MapClaims); !ok || !t.Valid {
+			// match session
+			if claims, ok := t.Claims.(jwt.MapClaims); !ok || !t.Valid || claims["aud"] != r.Context().Value("deviceIP") {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			} else {
-				uid, sid := claims["sub"].(string), claims["aud"].(string)
-				ctx := context.WithValue(context.WithValue(r.Context(), "user", &model.User{
-					UserId: uid,
-				}), "sessionId", sid)
+				uid := claims["sub"].(string)
+				ip := claims["aud"].(string)
+				db := db.GetDB(r.Context())
+				var u model.User
+				if err := db.Preload("Groups").Preload("Sessions").First(&u, uid).Error; err != nil {
+					if errors.Is(err, gorm.ErrRecordNotFound) {
+						w.WriteHeader(http.StatusForbidden)
+					} else {
+						w.WriteHeader(http.StatusInternalServerError)
+					}
+					return
+				}
+				var s *model.Session
+				for _, ss := range u.Sessions {
+					if ss.IP == ip {
+						s = &ss
+						break
+					}
+				}
+				if s == nil {
+					w.WriteHeader(http.StatusForbidden)
+					w.Write([]byte("session does not exist"))
+					return
+				}
+				ctx := context.WithValue(context.WithValue(r.Context(), "user", &u), "session", s)
 				h.ServeHTTP(w, r.WithContext(ctx))
 			}
 		}

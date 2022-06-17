@@ -8,6 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+	m "github.com/puoklam/chat-app-backend/middleware"
 )
 
 func New(mux http.Handler) *http.Server {
@@ -41,8 +43,23 @@ func New(mux http.Handler) *http.Server {
 }
 
 func SetupMiddlewares(r *chi.Mux) {
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins: []string{"http://localhost:3000"},
+		AllowedMethods: []string{
+			http.MethodHead,
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+		},
+		AllowedHeaders:   []string{"*"},
+		AllowCredentials: true,
+	}))
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	r.Use(m.WithDeviceInfo)
+	// r.Use(m.WithClient)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 }
