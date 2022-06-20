@@ -13,14 +13,14 @@ import (
 
 func WithGroup(h http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		gid := chi.URLParam(r, "groupID")
-		if gid == "" {
+		id := chi.URLParam(r, "groupID")
+		if id == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		db := GetDB(r.Context())
 		var grp model.Group
-		if err := db.Preload("Members").First(&grp, gid).Error; err != nil {
+		if err := db.Preload("Members").First(&grp, id).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				w.WriteHeader(http.StatusNotFound)
 			} else {

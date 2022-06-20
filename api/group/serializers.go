@@ -17,3 +17,7 @@ type OutListGroups struct {
 	model.Base
 	Name string `json:"name"`
 }
+
+type InCreateMsg struct {
+	Message *string `json:"message"`
+}

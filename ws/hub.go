@@ -9,14 +9,19 @@ import (
 var hub *Hub
 var once sync.Once
 
+type clients struct {
+	sync.Mutex
+	c map[string]*Client
+}
 type Hub struct {
-	clients    map[string]*Client // session(ip + user) -> []client
+	// clients    map[string]*Client // session(ip + user) -> []client
+	clients    *clients
 	register   chan *Client
 	unregister chan *Client
 }
 
 func (h *Hub) Client(uid uint, ip string) *Client {
-	return h.clients[key(uid, ip)]
+	return h.clients.c[key(uid, ip)]
 }
 
 func (h *Hub) Register() chan *Client {
@@ -28,35 +33,42 @@ func (h *Hub) Run() {
 		select {
 		case c := <-h.register:
 			c.Lock()
-			k := key(c.userId, c.ip)
-			if c, ok := h.clients[k]; ok {
+			k := key(c.user.ID, c.ip)
+			h.clients.Lock()
+			if c, ok := h.clients.c[k]; ok {
 				c.Close()
 			}
-			h.clients[k] = c
+			h.clients.c[k] = c
+			h.clients.Unlock()
 			c.Unlock()
 		case c := <-h.unregister:
 			c.Lock()
 			c.Close()
-			k := key(c.userId, c.ip)
-			if cl, ok := h.clients[k]; ok && cl == c {
-				delete(h.clients, k)
+			k := key(c.user.ID, c.ip)
+			h.clients.Lock()
+			if cl, ok := h.clients.c[k]; ok && cl == c {
+				delete(h.clients.c, k)
 			}
+			h.clients.Unlock()
 			c.Unlock()
 		}
 	}
 }
 
 func (h *Hub) Close() {
-	for k, c := range h.clients {
+	for k, c := range h.clients.c {
 		c.Close()
-		delete(h.clients, k)
+		delete(h.clients.c, k)
 	}
 }
 
 func GetHub() *Hub {
 	once.Do(func() {
+		clients := &clients{
+			c: make(map[string]*Client),
+		}
 		hub = &Hub{
-			clients:    make(map[string]*Client),
+			clients:    clients,
 			register:   make(chan *Client),
 			unregister: make(chan *Client),
 		}

@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/puoklam/chat-app-backend/db"
 	"github.com/puoklam/chat-app-backend/db/model"
+	"github.com/puoklam/chat-app-backend/middleware"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -115,7 +116,9 @@ func (h *Handlers) signin(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(2 * time.Hour),
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   false,
+		SameSite: http.SameSiteStrictMode,
+		// MaxAge:   int(7200),
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refreshToken",
@@ -123,7 +126,9 @@ func (h *Handlers) signin(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(60 * 24 * time.Hour),
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   false,
+		SameSite: http.SameSiteStrictMode,
+		// MaxAge:   int(60 * 24 * 60),
 	})
 	json.NewEncoder(w).Encode(struct {
 		IdToken string `json:"id_token"`
@@ -197,12 +202,27 @@ func (h *Handlers) jwks(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "./auth/jwks.json")
 }
 
+func (h *Handlers) user(w http.ResponseWriter, r *http.Request) {
+	u := r.Context().Value("user").(*model.User)
+	encode := json.NewEncoder(w)
+
+	w.WriteHeader(http.StatusOK)
+	if err := encode.Encode(u); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	return
+}
+
 func (h *Handlers) SetupRoutes(r *chi.Mux) {
 	r.Route("/auth", func(r chi.Router) {
 		r.Get("/jwks.json", h.jwks)
-		r.Post("/signin", h.signin)
-		r.Post("/signout", h.signout)
 		r.Post("/register", h.register)
+		r.Post("/signin", h.signin)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.Authenticator(h.logger))
+			r.Get("/user", h.user)
+			r.Post("/signout", h.signout)
+		})
 	})
 }
 

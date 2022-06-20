@@ -11,6 +11,7 @@ import (
 	"github.com/puoklam/chat-app-backend/api/auth"
 	"github.com/puoklam/chat-app-backend/api/group"
 	"github.com/puoklam/chat-app-backend/api/socket"
+	"github.com/puoklam/chat-app-backend/api/user"
 	_ "github.com/puoklam/chat-app-backend/db"
 	"github.com/puoklam/chat-app-backend/mq"
 	"github.com/puoklam/chat-app-backend/server"
@@ -18,7 +19,7 @@ import (
 )
 
 func cleanup() error {
-	mq.GetProducer().Stop()
+	mq.StopProducer()
 	ws.GetHub().Close()
 	return mq.GetConn().Close()
 }
@@ -45,6 +46,9 @@ func main() {
 	authHandlers := auth.NewHandlers(logger)
 	authHandlers.SetupRoutes(r)
 
+	userHandlers := user.NewHandlers(logger)
+	userHandlers.SetupRoutes(r)
+
 	grpHandlers := group.NewHandlers(logger)
 	grpHandlers.SetupRoutes(r)
 
@@ -56,6 +60,8 @@ func main() {
 		logger.Fatalln(err)
 	}
 }
+
+// TODO: Input validation middleware
 
 // https://levelup.gitconnected.com/implementing-messaging-queue-nsq-in-golang-using-docker-99b402293b12
 // http://txt.fliglio.com/2020/09/nsq-and-golang/

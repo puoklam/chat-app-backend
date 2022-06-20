@@ -1,13 +1,13 @@
 package ws
 
 import (
-	"encoding/json"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/nsqio/go-nsq"
+	"github.com/puoklam/chat-app-backend/db/model"
 )
 
 const (
@@ -29,38 +29,45 @@ type Data struct {
 	Content string `json:"content"`
 }
 
+type Message interface {
+	Body() []byte
+	OnError(err error)
+}
+
 type ClientCfg struct {
-	Logger    *log.Logger
-	Conn      *websocket.Conn
-	Producer  *nsq.Producer
+	Logger *log.Logger
+	Conn   *websocket.Conn
+	// Producer  *nsq.Producer
 	Consumers map[string][]*nsq.Consumer
-	UserID    uint
+	User      *model.User
 	IP        string
-	Send      chan *nsq.Message
+	Send      chan Message
 }
 
 // Client per connection (each device should have at most 1 connection)
 type Client struct {
 	sync.Mutex
-	logger    *log.Logger
-	conn      *websocket.Conn
-	producer  *nsq.Producer
+	logger *log.Logger
+	conn   *websocket.Conn
+	// producer  *nsq.Producer
 	consumers map[string][]*nsq.Consumer
-	userId    uint
+	user      *model.User
 	ip        string
-	send      chan *nsq.Message
+	send      chan Message
 }
 
-func (c *Client) Send() chan *nsq.Message {
+func (c *Client) Send() chan Message {
 	return c.send
 }
 
 // user send msg from frontend to backend
 func (c *Client) ReadPump() {
 	defer func() {
+		c.Lock()
 		GetHub().unregister <- c
 		c.ClearConsumers()
 		c.conn.Close()
+		defer c.Unlock()
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
@@ -71,20 +78,12 @@ func (c *Client) ReadPump() {
 	})
 
 	for {
-		_, msg, err := c.conn.ReadMessage()
+		_, _, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				c.logger.Printf("error: %v\n", err)
 			}
 			break
-		}
-		var data *Data
-		if err := json.Unmarshal(msg, &data); err != nil {
-			c.logger.Printf("error: %v\n", err)
-			continue
-		}
-		if err := c.producer.Publish(data.Topic, []byte(data.Content)); err != nil {
-			c.logger.Println(err)
 		}
 	}
 }
@@ -108,11 +107,13 @@ func (c *Client) WritePump() {
 
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
-				msg.RequeueWithoutBackoff(0)
+				msg.OnError(err)
+				// msg.RequeueWithoutBackoff(0)
 				return
 			}
-			if _, err := w.Write(msg.Body); err != nil {
-				msg.RequeueWithoutBackoff(0)
+			if _, err := w.Write(msg.Body()); err != nil {
+				msg.OnError(err)
+				// msg.RequeueWithoutBackoff(0)
 				return
 			}
 			if err := w.Close(); err != nil {
@@ -151,11 +152,11 @@ func (c *Client) Close() {
 
 func NewClient(cfg *ClientCfg) *Client {
 	return &Client{
-		logger:    cfg.Logger,
-		conn:      cfg.Conn,
-		producer:  cfg.Producer,
+		logger: cfg.Logger,
+		conn:   cfg.Conn,
+		// producer:  cfg.Producer,
 		consumers: cfg.Consumers,
-		userId:    cfg.UserID,
+		user:      cfg.User,
 		ip:        cfg.IP,
 		send:      cfg.Send,
 	}

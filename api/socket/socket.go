@@ -1,6 +1,7 @@
 package socket
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	"github.com/nsqio/go-nsq"
+	"github.com/puoklam/chat-app-backend/api"
 	"github.com/puoklam/chat-app-backend/db/model"
 	"github.com/puoklam/chat-app-backend/middleware"
 	"github.com/puoklam/chat-app-backend/mq"
@@ -37,16 +39,13 @@ func (h *Handlers) serveWs(w http.ResponseWriter, r *http.Request) {
 	c := NewClient(&ClientCfg{
 		Logger:    h.logger,
 		Conn:      conn,
-		UserID:    u.ID,
+		User:      u,
 		IP:        s.IP,
-		Producer:  mq.GetProducer(),
 		Consumers: make(map[string][]*nsq.Consumer),
-		Send:      make(chan *nsq.Message, 256),
+		Send:      make(chan Message, 256),
 	})
 
-	user := r.Context().Value("user").(*model.User)
-
-	for _, g := range user.Groups {
+	for _, g := range u.Groups {
 		topic := g.Topic.String()
 		ch := s.Ch
 
@@ -54,7 +53,27 @@ func (h *Handlers) serveWs(w http.ResponseWriter, r *http.Request) {
 
 		consumer, _ := mq.NewConsumer(topic, ch)
 		consumer.AddHandler(nsq.HandlerFunc(func(message *nsq.Message) error {
-			c.Send() <- message
+			var data mq.Message
+			if err := json.Unmarshal(message.Body, &data); err != nil {
+				return err
+			}
+			m := api.OutMessage{
+				From: &api.OutUser{
+					Base:        data.From.Base,
+					Username:    data.From.Username,
+					Displayname: data.From.Displayname,
+				},
+				Dst:       g.ID,
+				DstType:   "group",
+				Content:   string(data.Body),
+				Timestamp: message.Timestamp,
+			}
+			b, err := json.Marshal(m)
+			if err != nil {
+				return err
+			}
+			msg := api.NewMessage(message, h.logger, b)
+			c.Send() <- msg
 			return nil
 		}))
 		if err = consumer.ConnectToNSQLookupd(os.Getenv("NSQLOOKUPD_ADDR")); err != nil {

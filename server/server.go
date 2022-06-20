@@ -53,7 +53,7 @@ func SetupMiddlewares(r *chi.Mux) {
 			http.MethodPatch,
 			http.MethodDelete,
 		},
-		AllowedHeaders:   []string{"*"},
+		AllowedHeaders:   []string{"Origin", "Accept", "Content-Type"},
 		AllowCredentials: true,
 	}))
 	r.Use(middleware.RequestID)
