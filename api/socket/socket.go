@@ -48,9 +48,7 @@ func (h *Handlers) serveWs(w http.ResponseWriter, r *http.Request) {
 	for _, g := range u.Groups {
 		topic := g.Topic.String()
 		ch := s.Ch
-
-		// no need hash, should get session from context
-
+		gid := g.ID
 		consumer, _ := mq.NewConsumer(topic, ch)
 		consumer.AddHandler(nsq.HandlerFunc(func(message *nsq.Message) error {
 			var data mq.Message
@@ -63,7 +61,7 @@ func (h *Handlers) serveWs(w http.ResponseWriter, r *http.Request) {
 					Username:    data.From.Username,
 					Displayname: data.From.Displayname,
 				},
-				Dst:       g.ID,
+				Dst:       gid,
 				DstType:   "group",
 				Content:   string(data.Body),
 				Timestamp: message.Timestamp,

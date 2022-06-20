@@ -63,11 +63,7 @@ func (c *Client) Send() chan Message {
 // user send msg from frontend to backend
 func (c *Client) ReadPump() {
 	defer func() {
-		c.Lock()
 		GetHub().unregister <- c
-		c.ClearConsumers()
-		c.conn.Close()
-		defer c.Unlock()
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
@@ -152,9 +148,8 @@ func (c *Client) Close() {
 
 func NewClient(cfg *ClientCfg) *Client {
 	return &Client{
-		logger: cfg.Logger,
-		conn:   cfg.Conn,
-		// producer:  cfg.Producer,
+		logger:    cfg.Logger,
+		conn:      cfg.Conn,
 		consumers: cfg.Consumers,
 		user:      cfg.User,
 		ip:        cfg.IP,

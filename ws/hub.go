@@ -35,8 +35,11 @@ func (h *Hub) Run() {
 			c.Lock()
 			k := key(c.user.ID, c.ip)
 			h.clients.Lock()
-			if c, ok := h.clients.c[k]; ok {
-				c.Close()
+			if cl, ok := h.clients.c[k]; ok {
+				cl.Lock()
+				cl.Close()
+				cl.Unlock()
+				delete(h.clients.c, k)
 			}
 			h.clients.c[k] = c
 			h.clients.Unlock()

@@ -128,29 +128,35 @@ func (h *Handlers) joinGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) postJoin(w http.ResponseWriter, r *http.Request, g *model.Group) {
-	// conn := mq.GetConn()
-	// for _, s := range u.Sessions {
-	// 	cmd := nsq.Subscribe(topic, s.Ch)
-	// 	if err := conn.WriteCommand(cmd); err != nil {
-	// 		h.logger.Println(err)
-	// 	}
-	// }
+	u := r.Context().Value("user").(*model.User)
+	topic := g.Topic.String()
 
 	// WriteCommand not working for multiple subscribes, instantiate consumers instead
 	// TODO: log error
-	u := r.Context().Value("user").(*model.User)
-	topic := g.Topic.String()
 	for _, s := range u.Sessions {
+		conn := mq.GetConn()
+		cfg := nsq.NewConfig()
+		delegate := &mq.ConnDelegate{}
+		conn = nsq.NewConn(os.Getenv("NSQD_ADDR"), cfg, delegate)
+		if _, err := conn.Connect(); err != nil {
+			log.Println(err)
+			continue
+		}
+		cmd := nsq.Subscribe(topic, s.Ch)
+		if err := conn.WriteCommand(cmd); err != nil {
+			h.logger.Println(err)
+		}
+		conn.Close()
+
 		c := ws.GetHub().Client(u.ID, s.IP)
 		consumer, err := mq.NewConsumer(topic, s.Ch)
 		if err != nil {
 			continue
 		}
+		if c == nil {
+			continue
+		}
 		consumer.AddHandler(nsq.HandlerFunc(func(message *nsq.Message) error {
-			if c == nil {
-				message.RequeueWithoutBackoff(0)
-				return nil
-			}
 			var data mq.Message
 			if err := json.Unmarshal(message.Body, &data); err != nil {
 				return err
@@ -174,8 +180,7 @@ func (h *Handlers) postJoin(w http.ResponseWriter, r *http.Request, g *model.Gro
 			c.Send() <- msg
 			return nil
 		}))
-		if consumer.ConnectToNSQLookupd(os.Getenv("NSQLOOKUPD_ADDR")) != nil || c == nil {
-			// client not connected
+		if consumer.ConnectToNSQLookupd(os.Getenv("NSQLOOKUPD_ADDR")) != nil {
 			consumer.Stop()
 			continue
 		}
