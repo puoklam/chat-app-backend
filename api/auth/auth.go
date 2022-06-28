@@ -3,38 +3,23 @@ package auth
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/puoklam/chat-app-backend/db"
 	"github.com/puoklam/chat-app-backend/db/model"
+	"github.com/puoklam/chat-app-backend/env"
 	"github.com/puoklam/chat-app-backend/middleware"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
-
-var (
-	hs256Secret   any
-	ed25519Secret any
-)
-
-func init() {
-	hs256Secret = []byte(os.Getenv("HS256_SECRET"))
-	data, _ := os.ReadFile(os.Getenv("ED25519_PRIV_KEY_PATH"))
-	block, _ := pem.Decode(data)
-	key, _ := x509.ParsePKCS8PrivateKey(block.Bytes)
-	ed25519Secret = key
-}
 
 type Handlers struct {
 	logger *log.Logger
@@ -74,7 +59,7 @@ func (h *Handlers) signin(w http.ResponseWriter, r *http.Request) {
 
 	ip := c.Value("deviceIP").(string)
 	s := &model.Session{}
-	if err := db.GetDB(c).Where(&model.Session{IP: ip}).First(s).Error; err != nil {
+	if err := db.GetDB(c).Where(&model.Session{UserID: u.ID, IP: ip}).First(s).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -86,11 +71,11 @@ func (h *Handlers) signin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// multiple users in single device
-	if s.UserID != u.ID {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("multiple users"))
-		return
-	}
+	// if s.UserID != u.ID {
+	// 	w.WriteHeader(http.StatusBadRequest)
+	// 	w.Write([]byte("multiple users"))
+	// 	return
+	// }
 
 	idToken, err := genIdToken(map[string]any{
 		"id":          u.ID,
@@ -199,7 +184,7 @@ func (h *Handlers) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) jwks(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "./auth/jwks.json")
+	http.ServeFile(w, r, env.JWKS_PATH)
 }
 
 func (h *Handlers) user(w http.ResponseWriter, r *http.Request) {

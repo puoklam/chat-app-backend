@@ -3,12 +3,12 @@ package server
 import (
 	"crypto/tls"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/puoklam/chat-app-backend/env"
 	m "github.com/puoklam/chat-app-backend/middleware"
 )
 
@@ -32,7 +32,7 @@ func New(mux http.Handler) *http.Server {
 	}
 
 	return &http.Server{
-		Addr:              ":" + os.Getenv("APP_PORT"),
+		Addr:              ":" + env.APP_PORT,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       5 * time.Second,
 		WriteTimeout:      10 * time.Second,

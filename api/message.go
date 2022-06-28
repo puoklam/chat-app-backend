@@ -22,6 +22,10 @@ func (m *Message) OnError(err error) {
 	m.RequeueWithoutBackoff(0)
 }
 
+func (m *Message) OnSuccess() {
+	m.Finish()
+}
+
 func NewMessage(m *nsq.Message, l *log.Logger, c []byte) *Message {
 	return &Message{m, l, c}
 }

@@ -1,8 +1,6 @@
 package ws
 
 import (
-	"fmt"
-	"strconv"
 	"sync"
 )
 
@@ -11,17 +9,23 @@ var once sync.Once
 
 type clients struct {
 	sync.Mutex
-	c map[string]*Client
+	// user_id -> ip -> []*Client
+	c map[uint]map[string]*Client
 }
 type Hub struct {
-	// clients    map[string]*Client // session(ip + user) -> []client
 	clients    *clients
 	register   chan *Client
 	unregister chan *Client
 }
 
+func (h *Hub) Clients(uid uint) map[string]*Client {
+	return h.clients.c[uid]
+}
 func (h *Hub) Client(uid uint, ip string) *Client {
-	return h.clients.c[key(uid, ip)]
+	if _, ok := h.clients.c[uid]; !ok {
+		return nil
+	}
+	return h.clients.c[uid][ip]
 }
 
 func (h *Hub) Register() chan *Client {
@@ -33,24 +37,30 @@ func (h *Hub) Run() {
 		select {
 		case c := <-h.register:
 			c.Lock()
-			k := key(c.user.ID, c.ip)
 			h.clients.Lock()
-			if cl, ok := h.clients.c[k]; ok {
+			if h.clients.c[c.user.ID] == nil {
+				h.clients.c[c.user.ID] = make(map[string]*Client)
+			}
+			if cl := h.clients.c[c.user.ID][c.ip]; cl != nil {
 				cl.Lock()
 				cl.Close()
 				cl.Unlock()
-				delete(h.clients.c, k)
+				delete(h.clients.c[c.user.ID], c.ip)
 			}
-			h.clients.c[k] = c
+			h.clients.c[c.user.ID][c.ip] = c
 			h.clients.Unlock()
 			c.Unlock()
 		case c := <-h.unregister:
+			if c == nil {
+				continue
+			}
 			c.Lock()
 			c.Close()
-			k := key(c.user.ID, c.ip)
 			h.clients.Lock()
-			if cl, ok := h.clients.c[k]; ok && cl == c {
-				delete(h.clients.c, k)
+			if ips := h.clients.c[c.user.ID]; ips != nil {
+				if cl := ips[c.ip]; cl == c {
+					delete(h.clients.c[c.user.ID], c.ip)
+				}
 			}
 			h.clients.Unlock()
 			c.Unlock()
@@ -59,8 +69,11 @@ func (h *Hub) Run() {
 }
 
 func (h *Hub) Close() {
-	for k, c := range h.clients.c {
-		c.Close()
+	for k, ips := range h.clients.c {
+		for ip, c := range ips {
+			c.Close()
+			delete(ips, ip)
+		}
 		delete(h.clients.c, k)
 	}
 }
@@ -68,7 +81,7 @@ func (h *Hub) Close() {
 func GetHub() *Hub {
 	once.Do(func() {
 		clients := &clients{
-			c: make(map[string]*Client),
+			c: make(map[uint]map[string]*Client),
 		}
 		hub = &Hub{
 			clients:    clients,
@@ -77,8 +90,4 @@ func GetHub() *Hub {
 		}
 	})
 	return hub
-}
-
-func key(uid uint, ip string) string {
-	return fmt.Sprintf("%s:%s", strconv.FormatUint(uint64(uid), 10), ip)
 }

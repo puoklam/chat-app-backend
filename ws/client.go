@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/nsqio/go-nsq"
 	"github.com/puoklam/chat-app-backend/db/model"
+	"github.com/puoklam/chat-app-backend/redis"
 )
 
 const (
@@ -32,6 +34,7 @@ type Data struct {
 type Message interface {
 	Body() []byte
 	OnError(err error)
+	OnSuccess()
 }
 
 type ClientCfg struct {
@@ -50,7 +53,7 @@ type Client struct {
 	logger *log.Logger
 	conn   *websocket.Conn
 	// producer  *nsq.Producer
-	consumers map[string][]*nsq.Consumer
+	consumers map[string][]*nsq.Consumer // topic -> consumers
 	user      *model.User
 	ip        string
 	send      chan Message
@@ -89,7 +92,7 @@ func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		GetHub().unregister <- c
 	}()
 
 	for {
@@ -112,7 +115,9 @@ func (c *Client) WritePump() {
 				// msg.RequeueWithoutBackoff(0)
 				return
 			}
+			msg.OnSuccess()
 			if err := w.Close(); err != nil {
+				c.logger.Println("haha\n\n\n", err)
 				return
 			}
 		case <-ticker.C:
@@ -124,15 +129,32 @@ func (c *Client) WritePump() {
 	}
 }
 
-func (c *Client) AddConsumer(topic string, consumer *nsq.Consumer) {
+func (c *Client) AddConsumer(topic string, consumer *nsq.Consumer) (err error) {
+	k := fmt.Sprintf("%d:%s", c.user.ID, topic)
+	if err = redis.Conn.Send("MULTI"); err != nil {
+		return
+	}
+	redis.Conn.Send("INCR", k)
+	redis.Conn.Send("PERSIST", k)
+	if _, err = redis.Conn.Do("EXEC"); err != nil {
+		return
+	}
 	c.consumers[topic] = append(c.consumers[topic], consumer)
+	return
 }
 
 func (c *Client) StopConsumers(topic string) {
+	ct := 0
 	for _, csr := range c.consumers[topic] {
-		csr.Stop()
+		if csr != nil {
+			csr.Stop()
+			ct++
+		}
+		// <-csr.StopChan
 	}
 	delete(c.consumers, topic)
+	// TODO: handle redis DECRBY error
+	redis.Conn.Do("DECRBY", fmt.Sprintf("%d:%s", c.user.ID, topic), ct)
 }
 
 func (c *Client) ClearConsumers() {
@@ -142,6 +164,9 @@ func (c *Client) ClearConsumers() {
 }
 
 func (c *Client) Close() {
+	if c == nil {
+		return
+	}
 	c.ClearConsumers()
 	c.conn.Close()
 }

@@ -17,6 +17,9 @@
 # Environment variables
 *.env
 
+# Data
+data/*
+
 # Private keys
 ed25519
 

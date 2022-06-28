@@ -1,10 +1,28 @@
 package auth
 
 import (
+	"crypto/x509"
+	"encoding/pem"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/puoklam/chat-app-backend/env"
 )
+
+var (
+	ed25519Secret any
+)
+
+func init() {
+	data, _ := os.ReadFile(env.ED25519_PRIV_KEY_PATH)
+	block, _ := pem.Decode(data)
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		os.Exit(1)
+	}
+	ed25519Secret = key
+}
 
 func genIdToken(user any) (string, error) {
 	// RS256 for asymmetric signature, private key to sign in server, public key to verify in client
@@ -12,7 +30,6 @@ func genIdToken(user any) (string, error) {
 		"kid": "keyid",
 		"jku": "http://localhost:8080/auth/jwks.json",
 		// public should be in jwks mapped with kid
-		"pk": "publickey",
 		// time for re-authenticate (signin)
 		"exp":   time.Now().Add(24 * 165 * 10 * time.Hour).Unix(),
 		"iat":   time.Now().Unix(),
@@ -32,5 +49,5 @@ func genAccessToken(aud, sub string) (string, error) {
 		Audience:  aud,
 		Subject:   sub,
 	})
-	return token.SignedString(hs256Secret)
+	return token.SignedString(env.HS256_SECRET)
 }

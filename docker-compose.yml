@@ -9,14 +9,20 @@ services:
     environment:
       APP_PORT: "${APP_PORT}"
       HS256_SECRET: "${HS256_SECRET}"
-      ED25519_PRIV_KEY_PATH: "${ED25519_PRIV_KEY_PATH}"
-      NSQD_ADDR: "nsqd:4150"
+      ED25519_PRIV_KEY_PATH: "/data/ed25519"
+      JWKS_PATH: "/data/jwks.json"
+      NSQD_TCP_ADDR: "nsqd:4150"
+      NSQD_API_ADDR: "http://nsqd:4151"
       NSQLOOKUPD_ADDR: "${NSQLOOKUPD_ADDR}"
       DB_CONN: "postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable"
+      REDIS_CONN: "${REDIS_CONN:?err}"
+      EXCHANGE_NSQD_TCP_ADDR: "${EXCHANGE_NSQD_TCP_ADDR}"
+      SERVER_ID: "${SERVER_ID}"
+    volumes:
+      - ${DATA_PATH:?err}:/data
     depends_on:
       - nsqd
       - db
-      
   nsqd:
     image: nsqio/nsq
     container_name: im-nsqd

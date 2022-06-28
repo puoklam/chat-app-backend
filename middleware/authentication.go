@@ -6,18 +6,18 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/puoklam/chat-app-backend/db"
 	"github.com/puoklam/chat-app-backend/db/model"
+	"github.com/puoklam/chat-app-backend/env"
 	"gorm.io/gorm"
 )
 
 var hs256Secret any
 
 func init() {
-	hs256Secret = []byte(os.Getenv("HS256_SECRET"))
+	hs256Secret = env.HS256_SECRET
 }
 
 func Authenticator(logger *log.Logger) func(http.Handler) http.Handler {
@@ -49,7 +49,7 @@ func Authenticator(logger *log.Logger) func(http.Handler) http.Handler {
 				ip := claims["aud"].(string)
 				db := db.GetDB(r.Context())
 				var u model.User
-				if err := db.Preload("Groups").Preload("Sessions").First(&u, uid).Error; err != nil {
+				if err := db.Preload("Memberships").Preload("Sessions").First(&u, uid).Error; err != nil {
 					if errors.Is(err, gorm.ErrRecordNotFound) {
 						w.WriteHeader(http.StatusForbidden)
 					} else {

@@ -18,10 +18,10 @@ import (
 	"github.com/puoklam/chat-app-backend/ws"
 )
 
-func cleanup() error {
-	mq.StopProducer()
+func cleanup() {
+	mq.StopProducers()
 	ws.GetHub().Close()
-	return mq.GetConn().Close()
+	// return mq.GetConn().Close()
 }
 
 func main() {
@@ -30,9 +30,7 @@ func main() {
 
 	go func() {
 		<-c
-		if cleanup() != nil {
-			os.Exit(1)
-		}
+		cleanup()
 		fmt.Println("quit")
 		os.Exit(0)
 	}()
@@ -80,3 +78,5 @@ func main() {
 
 // https://stackoverflow.com/questions/31746182/docker-compose-wait-for-container-x-before-starting-y
 // https://ubuntu.com/server/docs/security-trust-store
+
+// https://entityframework.net/knowledge-base/61074684/make-api-call-and-database-operations-atomic

@@ -4,6 +4,12 @@ import (
 	"github.com/puoklam/chat-app-backend/db/model"
 )
 
+type OutGetGroup struct {
+	model.Base
+	Name   string `json:"name"`
+	Joined bool   `json:"joined"`
+}
+
 type InCreateGroup struct {
 	Name *string `json:"name"`
 }

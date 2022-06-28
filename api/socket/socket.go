@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	"github.com/nsqio/go-nsq"
 	"github.com/puoklam/chat-app-backend/api"
+	"github.com/puoklam/chat-app-backend/db"
 	"github.com/puoklam/chat-app-backend/db/model"
+	"github.com/puoklam/chat-app-backend/env"
 	"github.com/puoklam/chat-app-backend/middleware"
 	"github.com/puoklam/chat-app-backend/mq"
 	. "github.com/puoklam/chat-app-backend/ws"
@@ -45,13 +46,19 @@ func (h *Handlers) serveWs(w http.ResponseWriter, r *http.Request) {
 		Send:      make(chan Message, 256),
 	})
 
-	for _, g := range u.Groups {
+	db := db.GetDB(r.Context())
+	groups := make([]model.Group, 0)
+	if err := db.Model(&model.Membership{}).Where(&model.Membership{UserID: u.ID, Status: model.StatusActive}).Select("groups.*").Joins("LEFT JOIN groups ON group_id = groups.id", u.ID, model.StatusDeleting).Scan(&groups).Error; err != nil {
+		h.logger.Println(err)
+		return
+	}
+	for _, g := range groups {
 		topic := g.Topic.String()
 		ch := s.Ch
 		gid := g.ID
 		consumer, _ := mq.NewConsumer(topic, ch)
 		consumer.AddHandler(nsq.HandlerFunc(func(message *nsq.Message) error {
-			var data mq.Message
+			var data mq.BroadCastMessage
 			if err := json.Unmarshal(message.Body, &data); err != nil {
 				return err
 			}
@@ -74,11 +81,13 @@ func (h *Handlers) serveWs(w http.ResponseWriter, r *http.Request) {
 			c.Send() <- msg
 			return nil
 		}))
-		if err = consumer.ConnectToNSQLookupd(os.Getenv("NSQLOOKUPD_ADDR")); err != nil {
+		if err = consumer.ConnectToNSQLookupd(env.NSQLOOKUPD_ADDR); err != nil {
 			h.logger.Println(err)
 			return
 		}
-		c.AddConsumer(topic, consumer)
+		if err := c.AddConsumer(topic, consumer); err != nil {
+			consumer.Stop()
+		}
 	}
 
 	GetHub().Register() <- c
