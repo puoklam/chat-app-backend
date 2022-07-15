@@ -6,5 +6,5 @@ type User struct {
 	Displayname string        `json:"displayname"`
 	Pass        string        `json:"-"`
 	Memberships []*Membership `json:"memberships"`
-	Sessions    []Session     `json:"sessions"`
+	Sessions    []*Session    `json:"sessions"`
 }

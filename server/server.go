@@ -44,7 +44,7 @@ func New(mux http.Handler) *http.Server {
 
 func SetupMiddlewares(r *chi.Mux) {
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"http://localhost:3000"},
+		AllowedOrigins: []string{"http://localhost:3000", "http://localhost:19006"},
 		AllowedMethods: []string{
 			http.MethodHead,
 			http.MethodGet,

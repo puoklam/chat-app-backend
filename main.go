@@ -80,3 +80,7 @@ func main() {
 // https://ubuntu.com/server/docs/security-trust-store
 
 // https://entityframework.net/knowledge-base/61074684/make-api-call-and-database-operations-atomic
+// https://blog.wu-boy.com/2019/11/four-tips-with-select-in-golang/
+// https://github.com/firebase/firebase-admin-go/blob/master/snippets/messaging.go
+// https://medium.com/@jullainc/firebase-push-notifications-to-mobile-devices-using-nodejs-7d514e10dd4
+// https://medium.com/google-cloud/firebase-developing-serverless-functions-in-go-963cb011265d

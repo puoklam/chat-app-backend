@@ -14,9 +14,11 @@ const (
 
 type Membership struct {
 	CreatedAt time.Time        `json:"created_at"`
-	UserID    uint             `gorm:"primaryKey"`
-	GroupID   uint             `gorm:"primaryKey"`
-	Status    membershipStatus `gorm:"type:membership_status"`
+	UserID    uint             `json:"user_id" gorm:"primaryKey"`
+	GroupID   uint             `json:"group_id" gorm:"primaryKey"`
+	Status    membershipStatus `json:"status" gorm:"type:membership_status"`
+	User      *User            `json:"user"`
+	Group     *Group           `json:"group"`
 }
 
 func (s *membershipStatus) Scan(value any) error {

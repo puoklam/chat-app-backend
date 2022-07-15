@@ -15,6 +15,7 @@ import (
 	"github.com/puoklam/chat-app-backend/env"
 	"github.com/puoklam/chat-app-backend/middleware"
 	"github.com/puoklam/chat-app-backend/mq"
+	"github.com/puoklam/chat-app-backend/notifications"
 	"github.com/puoklam/chat-app-backend/ws"
 	"gorm.io/gorm"
 )
@@ -107,7 +108,7 @@ func (h *Handlers) createGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusCreated)
 	encoder.Encode(&OutCreateGroup{g.Base, g.Name})
 }
 
@@ -154,7 +155,12 @@ func (h *Handlers) joinGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	return
+	encoder := json.NewEncoder(w)
+	encoder.Encode(&OutGetGroup{
+		Base:   g.Base,
+		Name:   g.Name,
+		Joined: true,
+	})
 }
 
 func (h *Handlers) exitGroup(w http.ResponseWriter, r *http.Request) {
@@ -345,6 +351,10 @@ func (h *Handlers) createMsg(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	notifications.Send(r.Context(), map[string]string{
+		"a": "test",
+		"b": "test2",
+	}, "")
 	w.WriteHeader(http.StatusOK)
 }
 

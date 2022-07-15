@@ -12,6 +12,7 @@ import (
 	"github.com/puoklam/chat-app-backend/db/model"
 	"github.com/puoklam/chat-app-backend/env"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var hs256Secret any
@@ -49,7 +50,8 @@ func Authenticator(logger *log.Logger) func(http.Handler) http.Handler {
 				ip := claims["aud"].(string)
 				db := db.GetDB(r.Context())
 				var u model.User
-				if err := db.Preload("Memberships").Preload("Sessions").First(&u, uid).Error; err != nil {
+				// if err := db.Preload(clause.Associations).Preload("Memberships."+clause.Associations).First(&u, uid).Error; err != nil {
+				if err := db.Preload(clause.Associations).Preload("Memberships.Group").First(&u, uid).Error; err != nil {
 					if errors.Is(err, gorm.ErrRecordNotFound) {
 						w.WriteHeader(http.StatusForbidden)
 					} else {
@@ -60,7 +62,7 @@ func Authenticator(logger *log.Logger) func(http.Handler) http.Handler {
 				var s *model.Session
 				for _, ss := range u.Sessions {
 					if ss.IP == ip {
-						s = &ss
+						s = ss
 						break
 					}
 				}

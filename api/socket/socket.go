@@ -9,7 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/nsqio/go-nsq"
 	"github.com/puoklam/chat-app-backend/api"
-	"github.com/puoklam/chat-app-backend/db"
+	// "github.com/puoklam/chat-app-backend/db"
 	"github.com/puoklam/chat-app-backend/db/model"
 	"github.com/puoklam/chat-app-backend/env"
 	"github.com/puoklam/chat-app-backend/middleware"
@@ -46,13 +46,14 @@ func (h *Handlers) serveWs(w http.ResponseWriter, r *http.Request) {
 		Send:      make(chan Message, 256),
 	})
 
-	db := db.GetDB(r.Context())
-	groups := make([]model.Group, 0)
-	if err := db.Model(&model.Membership{}).Where(&model.Membership{UserID: u.ID, Status: model.StatusActive}).Select("groups.*").Joins("LEFT JOIN groups ON group_id = groups.id", u.ID, model.StatusDeleting).Scan(&groups).Error; err != nil {
-		h.logger.Println(err)
-		return
-	}
-	for _, g := range groups {
+	// db := db.GetDB(r.Context())
+	// groups := make([]model.Group, 0)
+	// if err := db.Model(&model.Membership{}).Where(&model.Membership{UserID: u.ID, Status: model.StatusActive}).Select("groups.*").Joins("LEFT JOIN groups ON group_id = groups.id", u.ID, model.StatusDeleting).Scan(&groups).Error; err != nil {
+	// 	h.logger.Println(err)
+	// 	return
+	// }
+	for _, m := range u.Memberships {
+		g := m.Group
 		topic := g.Topic.String()
 		ch := s.Ch
 		gid := g.ID

@@ -175,7 +175,7 @@ func (h *Handlers) register(w http.ResponseWriter, r *http.Request) {
 		Username: *body.Username,
 		Pass:     string(passBytes),
 	}
-	if db.WithContext(r.Context()).Create(user).Error != nil {
+	if db.Create(user).Error != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -189,10 +189,15 @@ func (h *Handlers) jwks(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) user(w http.ResponseWriter, r *http.Request) {
 	u := r.Context().Value("user").(*model.User)
-	encode := json.NewEncoder(w)
+
+	// db := db.GetDB(r.Context())
+	// var a any
+	// db.Model(u).Preload("Memberships.Group").Limit(1).Find(u)
+	// h.logger.Printf("%+v", u)
+	encoder := json.NewEncoder(w)
 
 	w.WriteHeader(http.StatusOK)
-	if err := encode.Encode(u); err != nil {
+	if err := encoder.Encode(u); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	return
