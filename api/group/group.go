@@ -15,7 +15,6 @@ import (
 	"github.com/puoklam/chat-app-backend/env"
 	"github.com/puoklam/chat-app-backend/middleware"
 	"github.com/puoklam/chat-app-backend/mq"
-	"github.com/puoklam/chat-app-backend/notifications"
 	"github.com/puoklam/chat-app-backend/ws"
 	"gorm.io/gorm"
 )
@@ -351,10 +350,10 @@ func (h *Handlers) createMsg(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	notifications.Send(r.Context(), map[string]string{
-		"a": "test",
-		"b": "test2",
-	}, "")
+	// notifications.Send(r.Context(), map[string]string{
+	// 	"a": "test",
+	// 	"b": "test2",
+	// }, "")
 	w.WriteHeader(http.StatusOK)
 }
 
