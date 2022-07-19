@@ -28,10 +28,6 @@ func (h *Hub) Client(uid uint, ip string) *Client {
 	return h.clients.c[uid][ip]
 }
 
-func (h *Hub) Register() chan *Client {
-	return h.register
-}
-
 func (h *Hub) Run() {
 	for {
 		select {
@@ -41,13 +37,13 @@ func (h *Hub) Run() {
 			if h.clients.c[c.user.ID] == nil {
 				h.clients.c[c.user.ID] = make(map[string]*Client)
 			}
-			if cl := h.clients.c[c.user.ID][c.ip]; cl != nil {
+			if cl := h.clients.c[c.user.ID][c.session.IP]; cl != nil {
 				cl.Lock()
 				cl.Close()
 				cl.Unlock()
-				delete(h.clients.c[c.user.ID], c.ip)
+				delete(h.clients.c[c.user.ID], c.session.IP)
 			}
-			h.clients.c[c.user.ID][c.ip] = c
+			h.clients.c[c.user.ID][c.session.IP] = c
 			h.clients.Unlock()
 			c.Unlock()
 		case c := <-h.unregister:
@@ -58,8 +54,8 @@ func (h *Hub) Run() {
 			c.Close()
 			h.clients.Lock()
 			if ips := h.clients.c[c.user.ID]; ips != nil {
-				if cl := ips[c.ip]; cl == c {
-					delete(h.clients.c[c.user.ID], c.ip)
+				if cl := ips[c.session.IP]; cl == c {
+					delete(h.clients.c[c.user.ID], c.session.IP)
 				}
 			}
 			h.clients.Unlock()

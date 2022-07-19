@@ -26,6 +26,7 @@ func init() {
 	db.AutoMigrate(&model.Group{})
 	db.AutoMigrate(&model.Membership{})
 	db.AutoMigrate(&model.Session{})
+	db.AutoMigrate(&model.Conn{})
 }
 
 func GetDB(ctx context.Context) *gorm.DB {

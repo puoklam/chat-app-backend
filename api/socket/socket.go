@@ -9,7 +9,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/nsqio/go-nsq"
 	"github.com/puoklam/chat-app-backend/api"
-	// "github.com/puoklam/chat-app-backend/db"
 	"github.com/puoklam/chat-app-backend/db/model"
 	"github.com/puoklam/chat-app-backend/env"
 	"github.com/puoklam/chat-app-backend/middleware"
@@ -38,10 +37,11 @@ func (h *Handlers) serveWs(w http.ResponseWriter, r *http.Request) {
 	u := r.Context().Value("user").(*model.User)
 	s := r.Context().Value("session").(*model.Session)
 	c := NewClient(&ClientCfg{
-		Logger:    h.logger,
-		Conn:      conn,
-		User:      u,
-		IP:        s.IP,
+		Logger:  h.logger,
+		Conn:    conn,
+		Session: s,
+		User:    u,
+		// IP:        s.IP,
 		Consumers: make(map[string][]*nsq.Consumer),
 		Send:      make(chan Message, 256),
 	})
@@ -86,14 +86,16 @@ func (h *Handlers) serveWs(w http.ResponseWriter, r *http.Request) {
 			h.logger.Println(err)
 			return
 		}
-		if err := c.AddConsumer(topic, consumer); err != nil {
+		if err := c.AddConsumer(r.Context(), topic, consumer); err != nil {
 			consumer.Stop()
 		}
 	}
 
-	GetHub().Register() <- c
-	go c.WritePump()
-	go c.ReadPump()
+	if err := c.StartWithContext(r.Context()); err != nil {
+		c.ClearConsumers()
+		h.logger.Println(err)
+		return
+	}
 }
 
 func (h *Handlers) connect(w http.ResponseWriter, r *http.Request) {

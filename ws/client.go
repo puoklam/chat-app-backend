@@ -1,15 +1,15 @@
 package ws
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/nsqio/go-nsq"
+	"github.com/puoklam/chat-app-backend/db"
 	"github.com/puoklam/chat-app-backend/db/model"
-	"github.com/puoklam/chat-app-backend/redis"
 )
 
 const (
@@ -42,9 +42,10 @@ type ClientCfg struct {
 	Conn   *websocket.Conn
 	// Producer  *nsq.Producer
 	Consumers map[string][]*nsq.Consumer
+	Session   *model.Session
 	User      *model.User
-	IP        string
-	Send      chan Message
+	// IP        string
+	Send chan Message
 }
 
 // Client per connection (each device should have at most 1 connection)
@@ -54,13 +55,34 @@ type Client struct {
 	conn   *websocket.Conn
 	// producer  *nsq.Producer
 	consumers map[string][]*nsq.Consumer // topic -> consumers
+	session   *model.Session
 	user      *model.User
-	ip        string
-	send      chan Message
+	// ip        string
+	send chan Message
 }
 
 func (c *Client) Send() chan Message {
 	return c.send
+}
+
+func (c *Client) start(ctx context.Context) error {
+	c.session.Status = model.StatusOnline
+	if err := db.GetDB(ctx).Save(c.session).Error; err != nil {
+		// c.ClearConsumers()
+		return err
+	}
+	hub.register <- c
+	go c.WritePump()
+	go c.ReadPump()
+	return nil
+}
+
+func (c *Client) Start() error {
+	return c.start(context.Background())
+}
+
+func (c *Client) StartWithContext(ctx context.Context) error {
+	return c.start(ctx)
 }
 
 // user send msg from frontend to backend
@@ -129,32 +151,31 @@ func (c *Client) WritePump() {
 	}
 }
 
-func (c *Client) AddConsumer(topic string, consumer *nsq.Consumer) (err error) {
-	k := fmt.Sprintf("%d:%s", c.user.ID, topic)
-	if err = redis.Conn.Send("MULTI"); err != nil {
-		return
-	}
-	redis.Conn.Send("INCR", k)
-	redis.Conn.Send("PERSIST", k)
-	if _, err = redis.Conn.Do("EXEC"); err != nil {
-		return
+func (c *Client) AddConsumer(ctx context.Context, topic string, consumer *nsq.Consumer) error {
+	var count int
+	q := "UPDATE conns SET count = count + 1 WHERE user_id = ? AND topic = ? RETURNING count"
+	if err := db.GetDB(ctx).Raw(q, c.user.ID, topic).Scan(&count).Error; err != nil {
+		return err
 	}
 	c.consumers[topic] = append(c.consumers[topic], consumer)
-	return
+	return nil
 }
 
-func (c *Client) StopConsumers(topic string) {
-	ct := 0
+func (c *Client) StopConsumers(topic string) int {
+	// TODO: what if error occur
+	var count int
+	q := "UPDATE conns SET count = count - 1 WHERE user_id = ? AND topic = ? RETURNING count"
+	if err := db.GetDB(nil).Raw(q, c.user.ID, topic).Scan(&count).Error; err != nil {
+		return -1
+	}
 	for _, csr := range c.consumers[topic] {
 		if csr != nil {
 			csr.Stop()
-			ct++
 		}
 		// <-csr.StopChan
 	}
 	delete(c.consumers, topic)
-	// TODO: handle redis DECRBY error
-	redis.Conn.Do("DECRBY", fmt.Sprintf("%d:%s", c.user.ID, topic), ct)
+	return count
 }
 
 func (c *Client) ClearConsumers() {
@@ -169,6 +190,9 @@ func (c *Client) Close() {
 	}
 	c.ClearConsumers()
 	c.conn.Close()
+	// TODO: handle error
+	c.session.Status = model.StatusOffline
+	db.GetDB(nil).Save(c.session)
 }
 
 func NewClient(cfg *ClientCfg) *Client {
@@ -177,7 +201,8 @@ func NewClient(cfg *ClientCfg) *Client {
 		conn:      cfg.Conn,
 		consumers: cfg.Consumers,
 		user:      cfg.User,
-		ip:        cfg.IP,
-		send:      cfg.Send,
+		session:   cfg.Session,
+		// ip:        cfg.IP,
+		send: cfg.Send,
 	}
 }

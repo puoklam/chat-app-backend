@@ -81,7 +81,23 @@ func (h *Handlers) createGroup(w http.ResponseWriter, r *http.Request) {
 		}},
 		// Members: []*model.User{u},
 	}
-	if err := db.Create(g).Error; err != nil {
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(g).Error; err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Model(&model.Session{}).Where(&model.Session{Status: model.StatusOnline}).Count(&count).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&model.Conn{
+			UserID: u.ID,
+			Topic:  g.Topic.String(),
+			Count:  0,
+		}).Error; err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
 		h.logger.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -129,8 +145,24 @@ func (h *Handlers) joinGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// if err := db.Model(g).Association("Members").Append(u); err != nil {
-	if err := db.Create(&model.Membership{UserID: u.ID, GroupID: g.ID, Status: model.StatusActive}).Error; err != nil {
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		// if err := db.Model(g).Association("Members").Append(u); err != nil {
+		if err := tx.Create(&model.Membership{UserID: u.ID, GroupID: g.ID, Status: model.StatusActive}).Error; err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Model(&model.Session{}).Where(&model.Session{Status: model.StatusOnline}).Count(&count).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&model.Conn{
+			UserID: u.ID,
+			Topic:  g.Topic.String(),
+			Count:  0,
+		}).Error; err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
 		h.logger.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -194,9 +226,15 @@ func (h *Handlers) exitGroup(w http.ResponseWriter, r *http.Request) {
 		if err := h.postExit(r, g); err != nil {
 			return err
 		}
+		if err := tx.Delete(&model.Conn{UserID: u.ID, Topic: g.Topic.String()}).Error; err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
+		m.Status = model.StatusActive
+		// TODO: handle error
+		db.Save(m)
 		h.logger.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -260,7 +298,7 @@ func (h *Handlers) postJoin(r *http.Request, g *model.Group) {
 			consumer.Stop()
 			continue
 		}
-		if err := c.AddConsumer(topic, consumer); err != nil {
+		if err := c.AddConsumer(r.Context(), topic, consumer); err != nil {
 			// h.logger.Println(err)
 			consumer.Stop()
 		}

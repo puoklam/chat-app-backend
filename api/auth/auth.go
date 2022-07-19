@@ -158,12 +158,16 @@ func (h *Handlers) register(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	if len(*body.Username) == 0 || len(*body.Password) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	if user, err := getUserFromUsername(r.Context(), *body.Username); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	} else if user != nil {
 		w.WriteHeader(http.StatusConflict)
-		encoder.Encode("error: username exists")
+		encoder.Encode("username exists")
 	}
 	db := db.GetDB(r.Context())
 	passBytes, err := bcrypt.GenerateFromPassword([]byte(*body.Password), 14)
@@ -241,6 +245,7 @@ func insertSession(ctx context.Context, userID uint, ip string) (session *model.
 		UserID: userID,
 		IP:     ip,
 		Ch:     ch,
+		Status: model.StatusOffline,
 	}
 	if ctx == nil {
 		ctx = context.Background()

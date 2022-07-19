@@ -2,13 +2,10 @@ package mq
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
-	"strconv"
 
 	"github.com/nsqio/go-nsq"
 	"github.com/puoklam/chat-app-backend/env"
-	"github.com/puoklam/chat-app-backend/redis"
 	"github.com/puoklam/chat-app-backend/ws"
 )
 
@@ -39,8 +36,8 @@ func init() {
 		}
 		switch msg.Type {
 		case SignalClearConsumers:
-			zero := clearConsumers(msg.UserID, msg.Topic)
-			if zero {
+			remaining := clearConsumers(msg.UserID, msg.Topic)
+			if remaining == 0 {
 				// TODO: what to do if publish error
 				Publish(env.EXCHANGE_NSQD_TCP_ADDR, msg.PostbackTopic, msg.PostbackMsg)
 			}
@@ -54,20 +51,14 @@ func init() {
 	ec = consumer
 }
 
-func clearConsumers(uid uint, topic string) bool {
+func clearConsumers(uid uint, topic string) int {
+	count := -1
 	clients := ws.GetHub().Clients(uid)
 	for _, c := range clients {
 		if c == nil {
 			continue
 		}
-		c.StopConsumers(topic)
+		count = c.StopConsumers(topic)
 	}
-	// TODO: handle redis GET error
-	v, _ := redis.Conn.Do("GET", fmt.Sprintf("%d:%s", uid, topic))
-	var ct int
-	if v != nil {
-		b := v.([]byte)
-		ct, _ = strconv.Atoi(string(b))
-	}
-	return v == nil || ct == 0
+	return count
 }
