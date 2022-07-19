@@ -9,13 +9,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/nsqio/go-nsq"
-	"github.com/puoklam/chat-app-backend/api"
 	"github.com/puoklam/chat-app-backend/db"
 	"github.com/puoklam/chat-app-backend/db/model"
 	"github.com/puoklam/chat-app-backend/env"
 	"github.com/puoklam/chat-app-backend/middleware"
 	"github.com/puoklam/chat-app-backend/mq"
-	"github.com/puoklam/chat-app-backend/ws"
 	"gorm.io/gorm"
 )
 
@@ -261,48 +259,14 @@ func (h *Handlers) postJoin(r *http.Request, g *model.Group) {
 			h.logger.Println(err)
 		}
 		conn.Close()
-
-		c := ws.GetHub().Client(u.ID, s.IP)
-		consumer, err := mq.NewConsumer(topic, s.Ch)
-		if err != nil {
-			continue
-		}
-		if c == nil {
-			continue
-		}
-		consumer.AddHandler(nsq.HandlerFunc(func(message *nsq.Message) error {
-			var data mq.BroadCastMessage
-			if err := json.Unmarshal(message.Body, &data); err != nil {
-				return err
-			}
-			m := api.OutMessage{
-				From: &api.OutUser{
-					Base:        data.From.Base,
-					Username:    data.From.Username,
-					Displayname: data.From.Displayname,
-				},
-				Dst:       g.ID,
-				DstType:   "group",
-				Content:   string(data.Body),
-				Timestamp: message.Timestamp,
-			}
-			b, err := json.Marshal(m)
-			if err != nil {
-				return err
-			}
-			msg := api.NewMessage(message, h.logger, b)
-			c.Send() <- msg
-			return nil
-		}))
-		if consumer.ConnectToNSQLookupd(env.NSQLOOKUPD_ADDR) != nil {
-			consumer.Stop()
-			continue
-		}
-		if err := c.AddConsumer(r.Context(), topic, consumer); err != nil {
-			// h.logger.Println(err)
-			consumer.Stop()
-		}
 	}
+	msg := &mq.ExchangeMessage{
+		Type:    mq.SignalAddConsumers,
+		UserID:  u.ID,
+		GroupID: g.ID,
+		Topic:   topic,
+	}
+	mq.Publish(env.EXCHANGE_NSQD_TCP_ADDR, "info", msg)
 }
 
 func (h *Handlers) postExit(r *http.Request, g *model.Group) error {
@@ -313,6 +277,7 @@ func (h *Handlers) postExit(r *http.Request, g *model.Group) error {
 	msg := &mq.ExchangeMessage{
 		Type:          mq.SignalClearConsumers,
 		UserID:        u.ID,
+		GroupID:       g.ID,
 		Topic:         topic,
 		PostbackTopic: env.SERVER_ID,
 		PostbackCh:    env.SERVER_ID,

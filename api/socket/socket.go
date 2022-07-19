@@ -78,7 +78,7 @@ func (h *Handlers) serveWs(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return err
 			}
-			msg := api.NewMessage(message, h.logger, b)
+			msg := api.NewMessage(message, b)
 			c.Send() <- msg
 			return nil
 		}))

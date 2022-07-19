@@ -65,6 +65,10 @@ func (c *Client) Send() chan Message {
 	return c.send
 }
 
+func (c *Client) Session() *model.Session {
+	return c.session
+}
+
 func (c *Client) start(ctx context.Context) error {
 	c.session.Status = model.StatusOnline
 	if err := db.GetDB(ctx).Save(c.session).Error; err != nil {

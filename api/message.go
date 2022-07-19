@@ -1,15 +1,13 @@
 package api
 
 import (
-	"log"
-
 	"github.com/nsqio/go-nsq"
 	"github.com/puoklam/chat-app-backend/db/model"
 )
 
 type Message struct {
 	*nsq.Message
-	logger  *log.Logger
+	// logger  *log.Logger
 	Content []byte
 }
 
@@ -18,7 +16,7 @@ func (m *Message) Body() []byte {
 }
 
 func (m *Message) OnError(err error) {
-	m.logger.Println(err)
+	// m.logger.Println(err)
 	m.RequeueWithoutBackoff(0)
 }
 
@@ -26,8 +24,8 @@ func (m *Message) OnSuccess() {
 	m.Finish()
 }
 
-func NewMessage(m *nsq.Message, l *log.Logger, c []byte) *Message {
-	return &Message{m, l, c}
+func NewMessage(m *nsq.Message, c []byte) *Message {
+	return &Message{m, c}
 }
 
 type OutUser struct {
