@@ -59,6 +59,8 @@ type Client struct {
 	user      *model.User
 	// ip        string
 	send chan Message
+	// database session keep online
+	keepAlive bool
 }
 
 func (c *Client) Send() chan Message {
@@ -70,12 +72,14 @@ func (c *Client) Session() *model.Session {
 }
 
 func (c *Client) start(ctx context.Context) error {
+	hub.register <- c
+	// database update must be after hub register due to the possibility of previously active client with same session
 	c.session.Status = model.StatusOnline
 	if err := db.GetDB(ctx).Save(c.session).Error; err != nil {
 		// c.ClearConsumers()
+		c.Close(false)
 		return err
 	}
-	hub.register <- c
 	go c.WritePump()
 	go c.ReadPump()
 	return nil
@@ -92,6 +96,7 @@ func (c *Client) StartWithContext(ctx context.Context) error {
 // user send msg from frontend to backend
 func (c *Client) ReadPump() {
 	defer func() {
+		c.close()
 		GetHub().unregister <- c
 	}()
 
@@ -118,6 +123,7 @@ func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
+		c.close()
 		GetHub().unregister <- c
 	}()
 
@@ -143,7 +149,6 @@ func (c *Client) WritePump() {
 			}
 			msg.OnSuccess()
 			if err := w.Close(); err != nil {
-				c.logger.Println("haha\n\n\n", err)
 				return
 			}
 		case <-ticker.C:
@@ -188,15 +193,18 @@ func (c *Client) ClearConsumers() {
 	}
 }
 
-func (c *Client) Close() {
-	if c == nil {
-		return
-	}
+func (c *Client) close() {
 	c.ClearConsumers()
+	if !c.keepAlive {
+		// TODO: handle error
+		c.session.Status = model.StatusOffline
+		db.GetDB(nil).Save(c.session)
+	}
+}
+
+func (c *Client) Close(KeepAlive bool) {
+	c.keepAlive = KeepAlive
 	c.conn.Close()
-	// TODO: handle error
-	c.session.Status = model.StatusOffline
-	db.GetDB(nil).Save(c.session)
 }
 
 func NewClient(cfg *ClientCfg) *Client {

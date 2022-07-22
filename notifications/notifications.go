@@ -60,3 +60,36 @@ package notifications
 // // // Initialize Firebase
 // // const app = initializeApp(firebaseConfig);
 // // const analytics = getAnalytics(app);
+
+import (
+	"fmt"
+
+	expo "github.com/oliveroneill/exponent-server-sdk-golang/sdk"
+)
+
+var client *expo.PushClient
+
+func init() {
+	client = expo.NewPushClient(nil)
+}
+func Send(title string, body string, tokens []string) error {
+	expoTokens := make([]expo.ExponentPushToken, 0, len(tokens))
+	for _, token := range tokens {
+		if t, err := expo.NewExponentPushToken(token); err == nil {
+			expoTokens = append(expoTokens, t)
+		}
+	}
+	m := &expo.PushMessage{
+		To:       expoTokens,
+		Body:     body,
+		Sound:    "default",
+		Title:    title,
+		Priority: expo.DefaultPriority,
+	}
+	if resp, err := client.Publish(m); err != nil {
+		fmt.Println(err)
+		return err
+	} else {
+		return resp.ValidateResponse()
+	}
+}

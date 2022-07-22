@@ -64,15 +64,18 @@ func (h *Handlers) serveWs(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 			m := api.OutMessage{
-				From: &api.OutUser{
-					Base:        data.From.Base,
-					Username:    data.From.Username,
-					Displayname: data.From.Displayname,
-				},
-				Dst:       gid,
-				DstType:   "group",
-				Content:   string(data.Body),
-				Timestamp: message.Timestamp,
+				// From: &api.OutUser{
+				// 	Base:        data.From.Base,
+				// 	Username:    data.From.Username,
+				// 	Displayname: data.From.Displayname,
+				// },
+				FromID:       data.From.ID,
+				FromName:     data.From.Displayname,
+				FromImageURL: data.From.ImageURL,
+				Dst:          gid,
+				DstType:      "group",
+				Content:      string(data.Body),
+				Timestamp:    message.Timestamp,
 			}
 			b, err := json.Marshal(m)
 			if err != nil {

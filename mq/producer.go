@@ -25,6 +25,7 @@ type User struct {
 	model.Base
 	Username    string `json:"username"`
 	Displayname string `json:"displayname"`
+	ImageURL    string `json:"image_url"`
 }
 
 type Message interface {

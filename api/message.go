@@ -35,9 +35,12 @@ type OutUser struct {
 }
 
 type OutMessage struct {
-	From      *OutUser `json:"from"`
-	Dst       uint     `json:"dst"`
-	DstType   string   `json:"dst_type"`
-	Content   string   `json:"content"`
-	Timestamp int64    `json:"timestamp"`
+	// From *OutUser `json:"from"`
+	FromID       uint   `json:"from_id"`
+	FromName     string `json:"from_name"`
+	FromImageURL string `json:"from_image_url"`
+	Dst          uint   `json:"dst"`
+	DstType      string `json:"dst_type"` // "group" | "personal"
+	Content      string `json:"content"`
+	Timestamp    int64  `json:"timestamp"`
 }

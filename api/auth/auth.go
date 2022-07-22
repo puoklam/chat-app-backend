@@ -65,7 +65,7 @@ func (h *Handlers) signin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// insert new session record
-		if s, err = insertSession(c, u.ID, ip); err != nil {
+		if s, err = insertSession(c, u.ID, ip, c.Value("expoPushToken").(string)); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -142,6 +142,7 @@ func (h *Handlers) signout(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   true,
 	})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handlers) register(w http.ResponseWriter, r *http.Request) {
@@ -211,10 +212,10 @@ func (h *Handlers) SetupRoutes(r *chi.Mux) {
 	r.Route("/auth", func(r chi.Router) {
 		r.Get("/jwks.json", h.jwks)
 		r.Post("/register", h.register)
-		r.Post("/signin", h.signin)
+		r.With(middleware.WithExpoPushToken).Post("/signin", h.signin)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticator(h.logger))
-			r.Get("/user", h.user)
+			r.With(middleware.NoCache).Get("/user", h.user)
 			r.Post("/signout", h.signout)
 		})
 	})
@@ -234,7 +235,7 @@ func getUserFromUsername(ctx context.Context, un string) (user *model.User, err 
 	return
 }
 
-func insertSession(ctx context.Context, userID uint, ip string) (session *model.Session, err error) {
+func insertSession(ctx context.Context, userID uint, ip string, token string) (session *model.Session, err error) {
 	k := fmt.Sprintf("%s:%s", strconv.FormatUint(uint64(userID), 10), ip)
 
 	h := sha256.New()
@@ -242,10 +243,11 @@ func insertSession(ctx context.Context, userID uint, ip string) (session *model.
 	ch := hex.EncodeToString(h.Sum(nil))
 
 	session = &model.Session{
-		UserID: userID,
-		IP:     ip,
-		Ch:     ch,
-		Status: model.StatusOffline,
+		UserID:        userID,
+		IP:            ip,
+		Ch:            ch,
+		ExpoPushToken: token,
+		Status:        model.StatusOffline,
 	}
 	if ctx == nil {
 		ctx = context.Background()

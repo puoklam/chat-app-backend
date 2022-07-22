@@ -65,15 +65,18 @@ func init() {
 						return err
 					}
 					m := api.OutMessage{
-						From: &api.OutUser{
-							Base:        data.From.Base,
-							Username:    data.From.Username,
-							Displayname: data.From.Displayname,
-						},
-						Dst:       msg.GroupID,
-						DstType:   "group",
-						Content:   string(data.Body),
-						Timestamp: message.Timestamp,
+						// From: &api.OutUser{
+						// 	Base:        data.From.Base,
+						// 	Username:    data.From.Username,
+						// 	Displayname: data.From.Displayname,
+						// },
+						FromID:       data.From.ID,
+						FromName:     data.From.Displayname,
+						FromImageURL: data.From.ImageURL,
+						Dst:          msg.GroupID,
+						DstType:      "group",
+						Content:      string(data.Body),
+						Timestamp:    message.Timestamp,
 					}
 					b, err := json.Marshal(m)
 					if err != nil {

@@ -2,6 +2,7 @@ package ws
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 var hub *Hub
@@ -16,6 +17,9 @@ type Hub struct {
 	clients    *clients
 	register   chan *Client
 	unregister chan *Client
+	count      int64
+	stop       bool
+	OnComplete func()
 }
 
 func (h *Hub) Clients(uid uint) map[string]*Client {
@@ -29,6 +33,9 @@ func (h *Hub) Client(uid uint, ip string) *Client {
 }
 
 func (h *Hub) Run() {
+	defer func() {
+		go h.OnComplete()
+	}()
 	for {
 		select {
 		case c := <-h.register:
@@ -39,11 +46,13 @@ func (h *Hub) Run() {
 			}
 			if cl := h.clients.c[c.user.ID][c.session.IP]; cl != nil {
 				cl.Lock()
-				cl.Close()
+				cl.Close(true)
 				cl.Unlock()
 				delete(h.clients.c[c.user.ID], c.session.IP)
+				atomic.AddInt64(&h.count, -1)
 			}
 			h.clients.c[c.user.ID][c.session.IP] = c
+			atomic.AddInt64(&h.count, 1)
 			h.clients.Unlock()
 			c.Unlock()
 		case c := <-h.unregister:
@@ -51,26 +60,34 @@ func (h *Hub) Run() {
 				continue
 			}
 			c.Lock()
-			c.Close()
+			// c.Close(false)
 			h.clients.Lock()
 			if ips := h.clients.c[c.user.ID]; ips != nil {
 				if cl := ips[c.session.IP]; cl == c {
 					delete(h.clients.c[c.user.ID], c.session.IP)
+					atomic.AddInt64(&h.count, -1)
 				}
 			}
 			h.clients.Unlock()
 			c.Unlock()
+			if h.stop && atomic.LoadInt64(&h.count) == 0 {
+				return
+			}
 		}
 	}
 }
 
 func (h *Hub) Close() {
-	for k, ips := range h.clients.c {
-		for ip, c := range ips {
-			c.Close()
-			delete(ips, ip)
+	h.stop = true
+	if atomic.LoadInt64(&h.count) == 0 {
+		go h.OnComplete()
+	}
+	for _, ips := range h.clients.c {
+		for _, c := range ips {
+			c.Close(false)
+			// delete(ips, ip)
 		}
-		delete(h.clients.c, k)
+		// delete(h.clients.c, k)
 	}
 }
 

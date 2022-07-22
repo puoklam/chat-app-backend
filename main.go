@@ -28,14 +28,19 @@ func main() {
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
+	hc := make(chan bool)
+
 	go func() {
 		<-c
 		cleanup()
+		<-hc
 		fmt.Println("quit")
 		os.Exit(0)
 	}()
 
+	ws.GetHub().OnComplete = func() { hc <- true }
 	go ws.GetHub().Run()
+
 	logger := log.New(os.Stdout, "im-backend", log.LstdFlags|log.Lshortfile)
 
 	r := chi.NewRouter()

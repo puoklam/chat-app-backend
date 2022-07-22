@@ -20,7 +20,7 @@ func WithGroup(h http.Handler) http.Handler {
 		}
 		db := GetDB(r.Context())
 		var grp model.Group
-		if err := db.Preload("Memberships").First(&grp, id).Error; err != nil {
+		if err := db.Preload("Owner").Preload("Memberships.User").First(&grp, id).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				w.WriteHeader(http.StatusNotFound)
 			} else {
