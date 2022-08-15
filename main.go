@@ -10,6 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/puoklam/chat-app-backend/api/auth"
 	"github.com/puoklam/chat-app-backend/api/group"
+	"github.com/puoklam/chat-app-backend/api/membership"
+	"github.com/puoklam/chat-app-backend/api/relationship"
 	"github.com/puoklam/chat-app-backend/api/socket"
 	"github.com/puoklam/chat-app-backend/api/user"
 	_ "github.com/puoklam/chat-app-backend/db"
@@ -54,6 +56,12 @@ func main() {
 
 	grpHandlers := group.NewHandlers(logger)
 	grpHandlers.SetupRoutes(r)
+
+	memHandlers := membership.NewHandlers(logger)
+	memHandlers.SetupRoutes(r)
+
+	relHandlers := relationship.NewHandlers(logger)
+	relHandlers.SetupRoutes(r)
 
 	wsHandlers := socket.NewHandlers(logger)
 	wsHandlers.SetupRoutes(r)

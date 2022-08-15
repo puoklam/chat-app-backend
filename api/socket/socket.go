@@ -69,11 +69,86 @@ func (h *Handlers) serveWs(w http.ResponseWriter, r *http.Request) {
 				// 	Username:    data.From.Username,
 				// 	Displayname: data.From.Displayname,
 				// },
+				ID:           string(message.ID[:]),
 				FromID:       data.From.ID,
 				FromName:     data.From.Displayname,
 				FromImageURL: data.From.ImageURL,
 				Dst:          gid,
 				DstType:      "group",
+				Content:      string(data.Body),
+				Timestamp:    message.Timestamp,
+			}
+			b, err := json.Marshal(m)
+			if err != nil {
+				return err
+			}
+			msg := api.NewMessage(message, b)
+			c.Send() <- msg
+			return nil
+		}))
+		if err = consumer.ConnectToNSQLookupd(env.NSQLOOKUPD_ADDR); err != nil {
+			h.logger.Println(err)
+			return
+		}
+		if err := c.AddConsumer(r.Context(), topic, consumer); err != nil {
+			consumer.Stop()
+		}
+	}
+	for _, rel := range u.ForwardRelationships {
+		topic := rel.Topic.String()
+		ch := s.Ch
+		consumer, _ := mq.NewConsumer(topic, ch)
+		consumer.AddHandler(nsq.HandlerFunc(func(message *nsq.Message) error {
+			var data mq.BroadCastMessage
+			if err := json.Unmarshal(message.Body, &data); err != nil {
+				return err
+			}
+			m := api.OutMessage{
+				ID:           string(message.ID[:]),
+				FromID:       data.From.ID,
+				FromName:     data.From.Displayname,
+				FromImageURL: data.From.ImageURL,
+				Dst:          rel.User2ID,
+				DstType:      "personal",
+				Content:      string(data.Body),
+				Timestamp:    message.Timestamp,
+			}
+			b, err := json.Marshal(m)
+			if err != nil {
+				return err
+			}
+			msg := api.NewMessage(message, b)
+			c.Send() <- msg
+			return nil
+		}))
+		if err = consumer.ConnectToNSQLookupd(env.NSQLOOKUPD_ADDR); err != nil {
+			h.logger.Println(err)
+			return
+		}
+		if err := c.AddConsumer(r.Context(), topic, consumer); err != nil {
+			consumer.Stop()
+		}
+	}
+	for _, rel := range u.BackwardRelationships {
+		if rel.BackwardStatus == "default" {
+			// to prevent duplicate consumer when accepting friend req
+			continue
+		}
+		topic := rel.Topic.String()
+		ch := s.Ch
+		consumer, _ := mq.NewConsumer(topic, ch)
+		consumer.AddHandler(nsq.HandlerFunc(func(message *nsq.Message) error {
+			var data mq.BroadCastMessage
+			if err := json.Unmarshal(message.Body, &data); err != nil {
+				return err
+			}
+			m := api.OutMessage{
+				ID:           string(message.ID[:]),
+				FromID:       data.From.ID,
+				FromName:     data.From.Displayname,
+				FromImageURL: data.From.ImageURL,
+				Dst:          rel.User1ID,
+				DstType:      "personal",
 				Content:      string(data.Body),
 				Timestamp:    message.Timestamp,
 			}

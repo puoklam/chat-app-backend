@@ -13,6 +13,7 @@ type clients struct {
 	// user_id -> ip -> []*Client
 	c map[uint]map[string]*Client
 }
+
 type Hub struct {
 	clients    *clients
 	register   chan *Client
@@ -65,6 +66,7 @@ func (h *Hub) Run() {
 			if ips := h.clients.c[c.user.ID]; ips != nil {
 				if cl := ips[c.session.IP]; cl == c {
 					delete(h.clients.c[c.user.ID], c.session.IP)
+					close(c.send)
 					atomic.AddInt64(&h.count, -1)
 				}
 			}

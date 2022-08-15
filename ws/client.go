@@ -72,12 +72,13 @@ func (c *Client) Session() *model.Session {
 }
 
 func (c *Client) start(ctx context.Context) error {
-	hub.register <- c
+	GetHub().register <- c
 	// database update must be after hub register due to the possibility of previously active client with same session
 	c.session.Status = model.StatusOnline
 	if err := db.GetDB(ctx).Save(c.session).Error; err != nil {
 		// c.ClearConsumers()
-		c.Close(false)
+		// true means no op, not really keep alive
+		c.Close(true)
 		return err
 	}
 	go c.WritePump()
@@ -124,7 +125,6 @@ func (c *Client) WritePump() {
 	defer func() {
 		ticker.Stop()
 		c.close()
-		GetHub().unregister <- c
 	}()
 
 	for {
@@ -194,6 +194,7 @@ func (c *Client) ClearConsumers() {
 }
 
 func (c *Client) close() {
+	c.conn.Close()
 	c.ClearConsumers()
 	if !c.keepAlive {
 		// TODO: handle error

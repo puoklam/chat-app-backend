@@ -1,6 +1,8 @@
 package env
 
-import "os"
+import (
+	"os"
+)
 
 type convertible interface {
 	~[]byte | ~string
@@ -15,9 +17,10 @@ var (
 	EXCHANGE_NSQD_TCP_ADDR string
 	NSQLOOKUPD_ADDR        string
 	DB_CONN                string
-	REDIS_CONN             string
 	APP_PORT               string
 	SERVER_ID              string
+	// REDIS_CONN             string
+	// FIREBASE_CRED_PATH     string
 )
 
 func initEnv[T convertible](dst *T, key string) {
@@ -37,7 +40,8 @@ func init() {
 	initEnv(&EXCHANGE_NSQD_TCP_ADDR, "EXCHANGE_NSQD_TCP_ADDR")
 	initEnv(&NSQLOOKUPD_ADDR, "NSQLOOKUPD_ADDR")
 	initEnv(&DB_CONN, "DB_CONN")
-	initEnv(&REDIS_CONN, "REDIS_CONN")
 	initEnv(&APP_PORT, "APP_PORT")
 	initEnv(&SERVER_ID, "SERVER_ID")
+	// initEnv(&REDIS_CONN, "REDIS_CONN")
+	// initEnv(&FIREBASE_CRED_PATH, "FIREBASE_CRED_PATH")
 }

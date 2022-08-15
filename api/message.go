@@ -36,6 +36,7 @@ type OutUser struct {
 
 type OutMessage struct {
 	// From *OutUser `json:"from"`
+	ID           string `json:"id"`
 	FromID       uint   `json:"from_id"`
 	FromName     string `json:"from_name"`
 	FromImageURL string `json:"from_image_url"`

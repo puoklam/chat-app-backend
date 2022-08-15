@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/mail"
 	"strconv"
 	"time"
 
@@ -27,22 +28,22 @@ type Handlers struct {
 
 func (h *Handlers) signin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Username *string `json:"username"`
-		Password *string `json:"password"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		h.logger.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if body.Username == nil || body.Password == nil {
-		h.logger.Println("error: invalid format")
+	if len(body.Email) < 1 || len(body.Password) < 1 {
 		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("invalid input"))
 		return
 	}
 
 	c := r.Context()
-	u, err := getUserFromUsername(c, *body.Username)
+	u, err := getUserFromEmail(c, body.Email)
 	if err != nil {
 		h.logger.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -52,7 +53,7 @@ func (h *Handlers) signin(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	if bcrypt.CompareHashAndPassword([]byte(u.Pass), []byte(*body.Password)) != nil {
+	if bcrypt.CompareHashAndPassword([]byte(u.Pass), []byte(body.Password)) != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -61,22 +62,17 @@ func (h *Handlers) signin(w http.ResponseWriter, r *http.Request) {
 	s := &model.Session{}
 	if err := db.GetDB(c).Where(&model.Session{UserID: u.ID, IP: ip}).First(s).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			h.logger.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		// insert new session record
 		if s, err = insertSession(c, u.ID, ip, c.Value("expoPushToken").(string)); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			h.logger.Println(err)
 			return
 		}
 	}
-	// multiple users in single device
-	// if s.UserID != u.ID {
-	// 	w.WriteHeader(http.StatusBadRequest)
-	// 	w.Write([]byte("multiple users"))
-	// 	return
-	// }
-
 	idToken, err := genIdToken(map[string]any{
 		"id":          u.ID,
 		"username":    u.Username,
@@ -147,37 +143,42 @@ func (h *Handlers) signout(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) register(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Username *string `json:"username"`
-		Password *string `json:"password"`
+		Email    string `json:"email"`
+		Username string `json:"username"`
+		Password string `json:"password"`
 	}
 	encoder, decoder := json.NewEncoder(w), json.NewDecoder(r.Body)
 	err := decoder.Decode(&body)
-	if body.Username == nil || body.Password == nil || err != nil {
-		if err != nil {
-			h.logger.Println(err)
-		}
+	if body.Email == "" || body.Username == "" || body.Password == "" {
 		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("invalid input"))
 		return
 	}
-	if len(*body.Username) == 0 || len(*body.Password) == 0 {
+	if addr, err := mail.ParseAddress(body.Email); err != nil {
+		h.logger.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("invalid email"))
 		return
+	} else {
+		body.Email = addr.Address
 	}
-	if user, err := getUserFromUsername(r.Context(), *body.Username); err != nil {
+	if exists, err := isUserExist(r.Context(), body.Email, body.Username); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
-	} else if user != nil {
+	} else if exists {
 		w.WriteHeader(http.StatusConflict)
-		encoder.Encode("username exists")
+		encoder.Encode("email / username exists")
+		return
 	}
 	db := db.GetDB(r.Context())
-	passBytes, err := bcrypt.GenerateFromPassword([]byte(*body.Password), 14)
+	passBytes, err := bcrypt.GenerateFromPassword([]byte(body.Password), 14)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	user := &model.User{
-		Username: *body.Username,
+		Email:    body.Email,
+		Username: body.Username,
 		Pass:     string(passBytes),
 	}
 	if db.Create(user).Error != nil {
@@ -205,7 +206,48 @@ func (h *Handlers) user(w http.ResponseWriter, r *http.Request) {
 	if err := encoder.Encode(u); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
-	return
+}
+
+func (h *Handlers) relPendingFw(w http.ResponseWriter, r *http.Request) {
+	u := r.Context().Value("user").(*model.User)
+	rels := make([]model.Relationship, 0)
+	err := db.GetDB(r.Context()).
+		Preload("User1").
+		Preload("User2").
+		Where(&model.Relationship{User1ID: u.ID, ForwardStatus: model.StatusAccepted, BackwardStatus: model.StatusDefault}).
+		Find(&rels).
+		Error
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	encoder := json.NewEncoder(w)
+	if encoder.Encode(rels) != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func (h *Handlers) relPendingBw(w http.ResponseWriter, r *http.Request) {
+	u := r.Context().Value("user").(*model.User)
+	rels := make([]model.Relationship, 0)
+	err := db.GetDB(r.Context()).
+		Preload("User1").
+		Preload("User2").
+		Where(&model.Relationship{User2ID: u.ID, ForwardStatus: model.StatusAccepted, BackwardStatus: model.StatusDefault}).
+		Find(&rels).
+		Error
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	encoder := json.NewEncoder(w)
+	if encoder.Encode(rels) != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 func (h *Handlers) SetupRoutes(r *chi.Mux) {
@@ -216,17 +258,31 @@ func (h *Handlers) SetupRoutes(r *chi.Mux) {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticator(h.logger))
 			r.With(middleware.NoCache).Get("/user", h.user)
+			r.With(middleware.NoCache).Get("/user/relationships/pendingforward", h.relPendingFw)
+			r.With(middleware.NoCache).Get("/user/relationships/pendingbackward", h.relPendingBw)
 			r.Post("/signout", h.signout)
 		})
 	})
 }
 
-func getUserFromUsername(ctx context.Context, un string) (user *model.User, err error) {
+func isUserExist(ctx context.Context, email, un string) (bool, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var exists bool
+	err := db.GetDB(ctx).Raw("SELECT EXISTS(SELECT 1 FROM users WHERE email = ? OR username = ?)", email, un).Scan(&exists).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = nil
+	}
+	return exists, nil
+}
+
+func getUserFromEmail(ctx context.Context, email string) (user *model.User, err error) {
 	user = &model.User{}
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err = db.GetDB(ctx).First(user, "username = ?", un).Error; err != nil {
+	if err = db.GetDB(ctx).First(user, "email = ?", email).Error; err != nil {
 		user = nil
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			err = nil

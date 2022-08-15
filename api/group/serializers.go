@@ -44,11 +44,12 @@ type InUpdateGroup struct {
 
 type OutUpdateGroup struct {
 	model.Base
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	ImageURL    string      `json:"image_url"`
-	OwnerID     uint        `json:"owner_id"`
-	Owner       *model.User `json:"owner"`
+	Name        string              `json:"name"`
+	Description string              `json:"description"`
+	ImageURL    string              `json:"image_url"`
+	OwnerID     uint                `json:"owner_id"`
+	Owner       *model.User         `json:"owner"`
+	Memberships []*model.Membership `json:"memberships"`
 }
 
 type InCreateMsg struct {

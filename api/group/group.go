@@ -32,10 +32,10 @@ type Handlers struct {
 }
 
 func (h *Handlers) listGroups(w http.ResponseWriter, r *http.Request) {
-
+	s := r.URL.Query().Get("s")
 	grps := make([]OutListGroups, 0)
 	db := db.GetDB(r.Context())
-	if err := db.Model(&model.Group{}).Preload("Owner").Find(&grps).Error; err != nil {
+	if err := db.Model(&model.Group{}).Preload("Owner").Where("name ILIKE ?", fmt.Sprintf("%%%s%%", s)).Find(&grps).Error; err != nil {
 		h.logger.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -62,6 +62,7 @@ func (h *Handlers) getGroup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	joined = m.Status != ""
 	w.WriteHeader(http.StatusOK)
 	encoder := json.NewEncoder(w)
 	encoder.Encode(&OutGetGroup{
@@ -107,10 +108,10 @@ func (h *Handlers) createGroup(w http.ResponseWriter, r *http.Request) {
 		if err := tx.Create(g).Error; err != nil {
 			return err
 		}
-		var count int64
-		if err := tx.Model(&model.Session{}).Where(&model.Session{Status: model.StatusOnline}).Count(&count).Error; err != nil {
-			return err
-		}
+		// var count int64
+		// if err := tx.Model(&model.Session{}).Where(&model.Session{Status: model.StatusOnline}).Count(&count).Error; err != nil {
+		// 	return err
+		// }
 		if err := tx.Create(&model.Conn{
 			UserID: u.ID,
 			Topic:  g.Topic.String(),
@@ -127,6 +128,8 @@ func (h *Handlers) createGroup(w http.ResponseWriter, r *http.Request) {
 
 	topic := g.Topic.String()
 
+	h.postJoin(r, g)
+
 	// Init nsq topic
 	msg := &mq.BroadCastMessage{
 		From: mq.User{
@@ -137,9 +140,6 @@ func (h *Handlers) createGroup(w http.ResponseWriter, r *http.Request) {
 		},
 		Body: []byte(fmt.Sprintf("group %s created", g.Name)),
 	}
-
-	h.postJoin(r, g)
-
 	if err := mq.Publish(g.Host, topic, msg); err != nil {
 		h.logger.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -291,7 +291,13 @@ func (h *Handlers) updateGroupImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 4<<20)
+	var limit int64 = 1 << 19 // 0.5 MB
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	if err := r.ParseMultipartForm(limit); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("image too large"))
+		return
+	}
 	image, fh, _ := r.FormFile("image")
 	if image != nil {
 		defer image.Close()
@@ -328,7 +334,7 @@ func (h *Handlers) updateGroupImage(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if url, err := storage.Upload(r.Context(), buf.Bytes(), "groups/"); err != nil {
+	if url, err := storage.Upload(r.Context(), buf, "groups/"); err != nil {
 		h.logger.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -389,6 +395,7 @@ func (h *Handlers) updateGroup(w http.ResponseWriter, r *http.Request) {
 		ImageURL:    g.ImageURL,
 		OwnerID:     g.OwnerID,
 		Owner:       g.Owner,
+		Memberships: g.Memberships,
 	})
 }
 
@@ -413,10 +420,11 @@ func (h *Handlers) postJoin(r *http.Request, g *model.Group) {
 		conn.Close()
 	}
 	msg := &mq.ExchangeMessage{
-		Type:    mq.SignalAddConsumers,
-		UserID:  u.ID,
-		GroupID: g.ID,
-		Topic:   topic,
+		Type:       mq.SignalAddConsumers,
+		UserID:     u.ID,
+		TargetID:   g.ID,
+		TargetType: "group",
+		Topic:      topic,
 	}
 	mq.Publish(env.EXCHANGE_NSQD_TCP_ADDR, "info", msg)
 }
@@ -429,7 +437,8 @@ func (h *Handlers) postExit(r *http.Request, g *model.Group) error {
 	msg := &mq.ExchangeMessage{
 		Type:          mq.SignalClearConsumers,
 		UserID:        u.ID,
-		GroupID:       g.ID,
+		TargetID:      g.ID,
+		TargetType:    "group",
 		Topic:         topic,
 		PostbackTopic: env.SERVER_ID,
 		PostbackCh:    env.SERVER_ID,
@@ -512,7 +521,7 @@ func (h *Handlers) createMsg(w http.ResponseWriter, r *http.Request) {
 	}
 	// TODO: handle error
 	go h.send(g.Memberships, g.Name, *body.Message)
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusCreated)
 }
 
 func (h *Handlers) send(memberships []*model.Membership, title, message string) error {
@@ -532,16 +541,14 @@ func (h *Handlers) send(memberships []*model.Membership, title, message string) 
 
 func (h *Handlers) SetupRoutes(r *chi.Mux) {
 	r.Route("/groups", func(r chi.Router) {
+		r.Use(middleware.Authenticator(h.logger))
+		r.Get("/", h.listGroups)
+		r.Post("/", h.createGroup)
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.Authenticator(h.logger))
-			r.Get("/", h.listGroups)
-			r.With(middleware.WithGroup).Get("/{groupID}", h.getGroup)
-		})
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.Authenticator(h.logger))
-			r.Post("/", h.createGroup)
+			r.Use(middleware.WithGroup)
+			r.Get("/{groupID}", h.getGroup)
 			r.With(middleware.WithGroup).Patch("/{groupID}", h.updateGroup)
-			r.With(middleware.WithGroup).Put("/{groupID}/image", h.updateGroupImage)
+			r.With(middleware.WithGroup).Post("/{groupID}/image", h.updateGroupImage)
 			r.With(middleware.WithGroup).Post("/{groupID}/join", h.joinGroup)
 			r.With(middleware.WithGroup).Post("/{groupID}/exit", h.exitGroup)
 			r.With(middleware.WithGroup).Post("/{groupID}/messages", h.createMsg)

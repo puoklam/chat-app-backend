@@ -15,10 +15,10 @@ services:
       NSQD_API_ADDR: "http://nsqd:4151"
       NSQLOOKUPD_ADDR: "${NSQLOOKUPD_ADDR}"
       DB_CONN: "postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable"
-      REDIS_CONN: "${REDIS_CONN:?err}"
+      # REDIS_CONN: "${REDIS_CONN:?err}"
       EXCHANGE_NSQD_TCP_ADDR: "${EXCHANGE_NSQD_TCP_ADDR}"
       SERVER_ID: "${SERVER_ID}"
-      FIREBASE_CRED_PATH: "/data/cred.json"
+      # FIREBASE_CRED_PATH: "/data/cred.json"
     volumes:
       - ${DATA_PATH:?err}:/data
     depends_on:

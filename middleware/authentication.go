@@ -51,7 +51,7 @@ func Authenticator(logger *log.Logger) func(http.Handler) http.Handler {
 				db := db.GetDB(r.Context())
 				var u model.User
 				// if err := db.Preload(clause.Associations).Preload("Memberships."+clause.Associations).First(&u, uid).Error; err != nil {
-				if err := db.Preload(clause.Associations).Preload("Memberships.Group").First(&u, uid).Error; err != nil {
+				if err := db.Preload(clause.Associations).Preload("Memberships.Group").Preload("ForwardRelationships").Preload("BackwardRelationships").First(&u, uid).Error; err != nil {
 					if errors.Is(err, gorm.ErrRecordNotFound) {
 						w.WriteHeader(http.StatusForbidden)
 					} else {

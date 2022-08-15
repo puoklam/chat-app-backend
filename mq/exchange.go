@@ -19,7 +19,8 @@ const (
 type ExchangeMessage struct {
 	Type          string          `json:"type"`
 	UserID        uint            `json:"user_id"`
-	GroupID       uint            `json:"group_id"`
+	TargetID      uint            `json:"target_id"`
+	TargetType    string          `json:"target_type"`
 	Topic         string          `json:"topic"`
 	PostbackTopic string          `json:"postback_topic"`
 	PostbackCh    string          `json:"postback_ch"`
@@ -55,26 +56,25 @@ func init() {
 				}
 				topic := msg.Topic
 				ch := c.Session().Ch
-				consumer, err := NewConsumer(topic, ch)
+				csr, err := NewConsumer(topic, ch)
 				if err != nil {
 					continue
 				}
-				consumer.AddHandler(nsq.HandlerFunc(func(message *nsq.Message) error {
+				// declare new vars to store data to prevent handler dst, dsttype keep using reference
+				// ?? maybe no need
+				targetID, targetType := msg.TargetID, msg.TargetType
+				csr.AddHandler(nsq.HandlerFunc(func(message *nsq.Message) error {
 					var data BroadCastMessage
 					if err := json.Unmarshal(message.Body, &data); err != nil {
 						return err
 					}
 					m := api.OutMessage{
-						// From: &api.OutUser{
-						// 	Base:        data.From.Base,
-						// 	Username:    data.From.Username,
-						// 	Displayname: data.From.Displayname,
-						// },
+						ID:           string(message.ID[:]),
 						FromID:       data.From.ID,
 						FromName:     data.From.Displayname,
 						FromImageURL: data.From.ImageURL,
-						Dst:          msg.GroupID,
-						DstType:      "group",
+						Dst:          targetID,
+						DstType:      targetType,
 						Content:      string(data.Body),
 						Timestamp:    message.Timestamp,
 					}
@@ -86,13 +86,13 @@ func init() {
 					c.Send() <- msg
 					return nil
 				}))
-				if consumer.ConnectToNSQLookupd(env.NSQLOOKUPD_ADDR) != nil {
-					consumer.Stop()
+				if csr.ConnectToNSQLookupd(env.NSQLOOKUPD_ADDR) != nil {
+					csr.Stop()
 					continue
 				}
-				if err := c.AddConsumer(context.Background(), topic, consumer); err != nil {
+				if err := c.AddConsumer(context.Background(), topic, csr); err != nil {
 					log.Println(err)
-					consumer.Stop()
+					csr.Stop()
 				}
 			}
 		}

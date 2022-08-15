@@ -43,7 +43,7 @@ func genIdToken(user any) (string, error) {
 func genAccessToken(aud, sub string) (string, error) {
 	// HS256 for symmetric signature, sign and verify in server
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.StandardClaims{
-		ExpiresAt: time.Now().Add(time.Hour).Unix(),
+		ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
 		IssuedAt:  time.Now().Unix(),
 		Issuer:    "https://chat.test.com",
 		Audience:  aud,
