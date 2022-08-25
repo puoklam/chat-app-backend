@@ -91,30 +91,34 @@ func (h *Handlers) signin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "accessToken",
-		Value:    accessToken,
-		Expires:  time.Now().Add(2 * time.Hour),
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteStrictMode,
-		// MaxAge:   int(7200),
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refreshToken",
-		Value:    "refreshToken",
-		Expires:  time.Now().Add(60 * 24 * time.Hour),
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteStrictMode,
-		// MaxAge:   int(60 * 24 * 60),
-	})
+	// http.SetCookie(w, &http.Cookie{
+	// 	Name:     "accessToken",
+	// 	Value:    accessToken,
+	// 	Expires:  time.Now().Add(2 * time.Hour),
+	// 	Path:     "/",
+	// 	HttpOnly: true,
+	// 	Secure:   false,
+	// 	SameSite: http.SameSiteStrictMode,
+	// 	// MaxAge:   int(7200),
+	// })
+	// http.SetCookie(w, &http.Cookie{
+	// 	Name:     "refreshToken",
+	// 	Value:    "refreshToken",
+	// 	Expires:  time.Now().Add(60 * 24 * time.Hour),
+	// 	Path:     "/",
+	// 	HttpOnly: true,
+	// 	Secure:   false,
+	// 	SameSite: http.SameSiteStrictMode,
+	// 	// MaxAge:   int(60 * 24 * 60),
+	// })
 	json.NewEncoder(w).Encode(struct {
-		IdToken string `json:"id_token"`
+		IdToken      string `json:"id_token"`
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
 	}{
-		IdToken: idToken,
+		IdToken:      idToken,
+		AccessToken:  accessToken,
+		RefreshToken: "refreshToken",
 	})
 	w.WriteHeader(http.StatusOK)
 }

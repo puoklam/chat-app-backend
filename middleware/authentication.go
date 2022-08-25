@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/puoklam/chat-app-backend/db"
@@ -24,23 +25,28 @@ func init() {
 func Authenticator(logger *log.Logger) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
-			c, err := r.Cookie("accessToken")
-			if err != nil {
-				logger.Println(err)
-				if errors.Is(err, http.ErrNoCookie) {
-					w.WriteHeader(http.StatusUnauthorized)
-				} else {
-					w.WriteHeader(http.StatusInternalServerError)
-				}
-				return
-			}
+			// c, err := r.Cookie("accessToken")
+			// if err != nil {
+			// 	logger.Println(err)
+			// 	if errors.Is(err, http.ErrNoCookie) {
+			// 		w.WriteHeader(http.StatusUnauthorized)
+			// 	} else {
+			// 		w.WriteHeader(http.StatusInternalServerError)
+			// 	}
+			// 	return
+			// }
+			a := r.Header.Get("Authorization")
+			tk := strings.TrimPrefix(a, "Bearer ")
 			// verify jwt
-			t, err := jwt.Parse(c.Value, func(t *jwt.Token) (interface{}, error) {
+			t, err := jwt.Parse(tk, func(t *jwt.Token) (interface{}, error) {
 				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 					return nil, fmt.Errorf("Unexpected signing method: %v", t.Header["alg"])
 				}
 				return hs256Secret, nil
 			})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusUnauthorized)
+			}
 			// match session
 			if claims, ok := t.Claims.(jwt.MapClaims); !ok || !t.Valid || claims["aud"] != r.Context().Value("deviceIP") {
 				w.WriteHeader(http.StatusUnauthorized)
