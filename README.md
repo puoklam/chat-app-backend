@@ -2,30 +2,25 @@
 
 # Design
 
-Client has multiple chats, each chat represent a chat room or conversation,
-each chat consists of a read offset and multiple consumer, each consumer represent a worker with respect to topic(chat room /conversation id), channel(device id), the read offset should be stored in db (redis or rdb)
+Users can login from any device(s), each devie may have multiple login sessons, so an unique client contains an ip and user.
+
+No log policy for messages
 
 # Synchronization
 
-Two device category
-- main
-- sub
+We dont store messages in database, so it is important to backup your history regularly.
 
-Since mobile devices provide a more persistent local storage, we will be utilizing by classifying mobile device as a main device,
-web on the other hand as a sub device.
-Each device generate a new socket connection in client's conns map with the key of device id.
+TODO: add backup and resotre feature
 
-## Sub devices initialization
+## Devices initialization
 
-When user connected to backend server from a sub device, a new websocket connection is established, the front end application will request for most recent messages (i.e. 100) from main device, read offset for each conversations, rooms from backend for syncing the latest state. If main device is off, then abort the connection for sub device
+When user connected to backend server from a sub device, a new websocket connection is established.
 
-whenever a message received from message queue, backend server will push it to any active connections.
+Whenever a message received from message queue, backend server will push it to any active connections.
 
-Once any device read new messages, the device will emit a signal to update the read offset in db, and notify other devices by listening on db subscription.
+## Devices termination
 
-## Sub devices termination
-
-When user terminate a sub device, all consumer with corresponding channel(device id) should be deleted, as well as the nsqd channel
+When user terminate a sub device, all consumer with corresponding channel should be deleted, as well as the nsqd channel
 
 # Useful links
 - [scaling nsq](https://segment.com/blog/scaling-nsq/)
@@ -49,3 +44,17 @@ When user terminate a sub device, all consumer with corresponding channel(device
 - [jwt blog](https://mkjwk.org/)
 - [jwt blog](https://docs.authlib.org/en/latest/specs/rfc8037.html)
 - [common anti patterns in go web applications](https://threedots.tech/post/common-anti-patterns-in-go-web-applications/)
+- [p2p data sync for mobile](https://vac.dev/p2p-data-sync-for-mobile)
+- [Bramble Synchronisation Protocol](https://code.briarproject.org/briar/briar-spec/blob/master/protocols/BSP.md)
+- [gorm advanced query](https://gorm.io/docs/advanced_query.html)
+- [p2p im](https://our.status.im/status-launches-private-peer-to-peer-messaging-protocol/)
+- [p2p im](https://shazzle.com/articles/what-is-peer-to-peer-p2p-messaging/)
+- [p2p im](https://github.com/erenulas/p2p-chat)
+- [mobile p2p protocol](https://www.quora.com/Is-there-a-simple-P2P-protocol-for-mobile-Apps)
+- [p2p group](https://ieeexplore.ieee.org/document/1698602)
+- [p2p mq](https://hevodata.com/learn/message-queues/#point)
+- [p2p mq](https://www.oreilly.com/library/view/java-message-service/9780596802264/ch04.html)
+- [gorm m2m](https://github.com/go-gorm/gorm/issues/3462)
+- [gorm association](https://gorm.io/docs/associations.html#Association-Mode)
+- [api testing](https://semaphoreci.com/community/tutorials/building-and-testing-a-rest-api-in-go-with-gorilla-mux-and-postgresql)
+- [gorm uuid](https://medium.com/@the.hasham.ali/how-to-use-uuid-key-type-with-gorm-cc00d4ec7100)
