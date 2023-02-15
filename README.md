@@ -1,12 +1,12 @@
 # chat-app-backend
 
-# Design
+## Design
 
 Users can login from any device(s), each devie may have multiple login sessons, so an unique client contains an ip and user.
 
 No log policy for messages
 
-# Synchronization
+## Synchronization
 
 We dont store messages in database, so it is important to backup your history regularly.
 
